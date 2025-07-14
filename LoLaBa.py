@@ -45,21 +45,21 @@ class FotokonyvGUI:
         # Új fotókönyv kezdése
         new_project_btn = tk.Button(button_frame, text="Új projekt létrehozása",
                                    width=button_width, height=button_height,
-                                   font=button_font, bg='#E8E8E8', fg='#888888',
+                                   font=button_font, bg='#E8E8E8', fg='black',
                                    command=self.show_page_selection)
         new_project_btn.pack(pady=10)
         
         # Régi projekt megnyitása
         open_project_btn = tk.Button(button_frame, text="Korábbi projekt megnyitása",
                                     width=button_width, height=button_height,
-                                    font=button_font, bg='#E8E8E8', fg='#888888',
+                                    font=button_font, bg='#E8E8E8', fg='black',
                                     command=self.load_project)
         open_project_btn.pack(pady=10)
         
         # Kilépés a programból
         exit_btn = tk.Button(button_frame, text="Kilépés",
                             width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
+                            font=button_font, bg='#E8E8E8', fg='black',
                             command=self.root.quit)
         exit_btn.pack(pady=10)
     
@@ -79,28 +79,28 @@ class FotokonyvGUI:
         # Projekt elmentése
         save_btn = tk.Button(button_frame, text="Projekt mentése",
                             width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
+                            font=button_font, bg='#E8E8E8', fg='black',
                             command=self.save_project)
         save_btn.pack(pady=15)
         
         # Projekt betöltése
         load_btn = tk.Button(button_frame, text="Projekt betöltése",
                             width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
+                            font=button_font, bg='#E8E8E8', fg='black',
                             command=self.load_project)
         load_btn.pack(pady=15)
         
         # Fotókönyv exportálása PDF-be
         export_btn = tk.Button(button_frame, text="Projekt exportálása",
                               width=button_width, height=button_height,
-                              font=button_font, bg='#E8E8E8', fg='#888888',
+                              font=button_font, bg='#E8E8E8', fg='black',
                               command=self.show_page_selection)
         export_btn.pack(pady=15)
         
         # Vissza a főmenübe
         back_btn = tk.Button(button_frame, text="Vissza a főmenübe",
                             width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
+                            font=button_font, bg='#E8E8E8', fg='black',
                             command=self.create_main_menu)
         back_btn.pack(pady=15)
     
@@ -168,7 +168,7 @@ class FotokonyvGUI:
         
         # Ezzel a gombbal lehet továbblépni
         apply_btn = tk.Button(self.root, text="🔧 Kiválaszt és alkalmaz",
-                             font=("Arial", 11), bg='#E8E8E8', fg='#888888',
+                             font=("Arial", 11), bg='#E8E8E8', fg='black',
                              command=self.show_photo_editor)
         apply_btn.pack(pady=20)
     
@@ -198,7 +198,7 @@ class FotokonyvGUI:
             page_frame.pack_propagate(False)
             
             page_label = tk.Label(page_frame, text=f"{i}. oldal", 
-                                 font=("Arial", 8), bg='#E8E8E8', fg='#888888')
+                                 font=("Arial", 8), bg='#E8E8E8', fg='black')
             page_label.pack(side=tk.BOTTOM)
         
         # Új oldal hozzáadása gomb (+ jel)
@@ -241,7 +241,7 @@ class FotokonyvGUI:
                 
                 # Fotó feltöltése gomb
                 add_photo_btn = tk.Button(controls_frame, text="Fotó hozzáadása ehhez az oldalhoz",
-                                         font=("Arial", 9), bg='#E8E8E8', fg='#888888',
+                                         font=("Arial", 9), bg='#E8E8E8', fg='black',
                                          command=self.add_photo)
                 add_photo_btn.pack(pady=5)
                 
@@ -274,7 +274,7 @@ class FotokonyvGUI:
                 bg_buttons = ["Háttér beállítása", "Szöveg hozzáadása", "Keret hozzáadása"]
                 for btn_text in bg_buttons:
                     btn = tk.Button(right_controls, text=btn_text,
-                                   font=("Arial", 9), bg='#E8E8E8', fg='#888888',
+                                   font=("Arial", 9), bg='#E8E8E8', fg='black',
                                    width=15)
                     btn.pack(pady=5)
         
@@ -295,7 +295,7 @@ class FotokonyvGUI:
         
         for btn_text, command in toolbar_buttons:
             btn = tk.Button(toolbar_frame, text=btn_text,
-                           font=("Arial", 10), bg='#E8E8E8', fg='#888888',
+                           font=("Arial", 10), bg='#E8E8E8', fg='black',
                            command=command)
             btn.pack(side=tk.LEFT, padx=10, pady=15)
     
