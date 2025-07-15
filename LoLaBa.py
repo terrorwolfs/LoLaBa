@@ -1,372 +1,561 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from tkinter import font as tkfont
+import customtkinter as ctk
+from tkinter import messagebox, filedialog
 import os
+from PIL import Image, ImageTk
+import traceback
+
+# --- Alapbeállítások ---
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
 class FotokonyvGUI:
-    def __init__(self, root):
-        self.root = root
+    """A fotókönyv-szerkesztő alkalmazás fő grafikus felületét (GUI) kezelő osztály."""
+
+    def __init__(self):
+        """Az osztály inicializálása, a fő ablak és az alapvető állapotok beállítása."""
+        self.root = ctk.CTk()
         self.root.title("LoLaBa Fotókönyv")
         self.root.geometry("1200x800")
-        self.root.configure(bg='#C4A484')
         
-        # Itt tárolom a projekt állapotát, meg az oldalakat
-        self.current_layout = 1
-        self.pages = []
+        # Dizájnhoz használt színek központi tárolása.
+        self.colors = {
+            'bg_primary': '#C4A484', 'bg_secondary': '#B5956B', 
+            'card_bg': '#F5F5F5', 'button_bg': '#E8E8E8',
+            'accent': '#A4B068', 'text_primary': '#333333',
+            'text_secondary': '#666666', 'green_box': '#4CAF50',
+            'selected_card': '#E8F5E8', 'selected_photo_border': '#4CAF50'
+        }
         
-        # Most elindítom a főmenüt
+        # Projekt állapotának alaphelyzetbe állítása és a főmenü létrehozása.
+        self._reset_project_state()
         self.create_main_menu()
-    
+
+    # --- BELSŐ MŰKÖDÉST SEGÍTŐ METÓDUSOK ---
+
+    def _reset_project_state(self):
+        """Minden projekt-specifikus változót alaphelyzetbe állít. Új projekt vagy betöltés esetén hívódik meg."""
+        self.current_layout = 1
+        self.custom_image_count = 1
+        self.selected_layout_card = None
+        self.pages = []
+        self.current_page = 0
+        self.uploaded_photos = []
+        self.selected_photo_index = None
+        self.photo_frames = []
+        self.photo_properties = {}
+
+    def _select_photo(self, photo_index):
+        """Kiválaszt egy képet az oldalon, kiemeli a keretét és aktiválja a szerkesztő csúszkákat."""
+        # Előző kijelölés megszüntetése, ha volt.
+        if self.selected_photo_index is not None and self.selected_photo_index < len(self.photo_frames):
+            self.photo_frames[self.selected_photo_index].configure(fg_color="#CCCCCC")
+
+        # Új kép kijelölése és vizuális jelölése.
+        self.selected_photo_index = photo_index
+        if self.selected_photo_index < len(self.photo_frames):
+            self.photo_frames[self.selected_photo_index].configure(fg_color=self.colors['selected_photo_border'])
+
+        # A csúszkák értékének beállítása a képhez tárolt, vagy alapértelmezett értékekre.
+        props = self.photo_properties.get((self.current_page, photo_index), {'zoom': 1.0, 'pan_x': 0.5})
+        self.zoom_slider.set(props['zoom'])
+        self.pan_x_slider.set(props['pan_x'])
+        
+        # Csúszkák aktiválása.
+        self.zoom_slider.configure(state="normal")
+        self.pan_x_slider.configure(state="normal")
+
+    def _update_photo_properties(self, value=None):
+        """A csúszkák változásakor elmenti az új zoom/pan értékeket és frissíti a kép nézetét."""
+        if self.selected_photo_index is None: return
+
+        key = (self.current_page, self.selected_photo_index)
+        self.photo_properties[key] = {'zoom': self.zoom_slider.get(), 'pan_x': self.pan_x_slider.get()}
+        
+        # A kép újrarajzolása a frissített tulajdonságokkal.
+        frame = self.photo_frames[self.selected_photo_index]
+        path = self.pages[self.current_page]['photos'][self.selected_photo_index]
+        self.display_photo_placeholder(frame, path, self.selected_photo_index, is_update=True)
+
+    def _disable_sliders(self):
+        """Letiltja a csúszkákat és megszünteti a kép kijelölését, pl. oldalváltáskor."""
+        if hasattr(self, 'zoom_slider') and hasattr(self, 'pan_x_slider'):
+            self.zoom_slider.configure(state="disabled")
+            self.pan_x_slider.configure(state="disabled")
+            self.zoom_slider.set(1.0)
+            self.pan_x_slider.set(0.5)
+        if self.selected_photo_index is not None and self.selected_photo_index < len(self.photo_frames):
+             self.photo_frames[self.selected_photo_index].configure(fg_color="#CCCCCC")
+        self.selected_photo_index = None
+
+    # --- FELÜLETET ÉPÍTŐ METÓDUSOK ---
+
     def create_main_menu(self):
-        """Itt készítem el a főmenüt ahonnan mindent el lehet érni"""
-        # Először kitörlöm az összes widget-et, hogy tiszta legyen
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # Nagy cím a tetején
-        title_font = tkfont.Font(family="Arial", size=24, weight="bold")
-        title_label = tk.Label(self.root, text="LoLaBa Fotókönyv", 
-                              font=title_font, bg='#C4A484', fg='white')
-        title_label.pack(pady=50)
-        
-        subtitle_label = tk.Label(self.root, text="Készíts saját, egyedi fotókönyvet egyszerű lépésekkel!", 
-                                 font=("Arial", 12), bg='#C4A484', fg='white')
-        subtitle_label.pack(pady=10)
-        
-        # Itt vannak a főmenü gombjai
-        button_frame = tk.Frame(self.root, bg='#C4A484')
-        button_frame.pack(pady=50)
-        
-        # Beállítom a gombok kinézetét
-        button_width = 25
-        button_height = 2
-        button_font = ("Arial", 11)
-        
-        # Új fotókönyv kezdése
-        new_project_btn = tk.Button(button_frame, text="Új projekt létrehozása",
-                                   width=button_width, height=button_height,
-                                   font=button_font, bg='#E8E8E8', fg='#888888',
-                                   command=self.show_page_selection)
-        new_project_btn.pack(pady=10)
-        
-        # Régi projekt megnyitása
-        open_project_btn = tk.Button(button_frame, text="Korábbi projekt megnyitása",
-                                    width=button_width, height=button_height,
-                                    font=button_font, bg='#E8E8E8', fg='#888888',
-                                    command=self.load_project)
-        open_project_btn.pack(pady=10)
-        
-        # Kilépés a programból
-        exit_btn = tk.Button(button_frame, text="Kilépés",
-                            width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
-                            command=self.root.quit)
-        exit_btn.pack(pady=10)
-    
-    def show_project_menu(self):
-        """Ez a projekt menü, itt lehet menteni, betölteni stb."""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # Menü gombok egy keretben
-        button_frame = tk.Frame(self.root, bg='#C4A484')
+        """Felépíti a főmenüt a kezdőgombokkal."""
+        self.clear_window()
+        main_frame = ctk.CTkFrame(self.root, fg_color=self.colors['bg_primary'], corner_radius=0)
+        main_frame.pack(fill="both", expand=True)
+        ctk.CTkLabel(main_frame, text="LoLaBa Fotókönyv", font=ctk.CTkFont(size=48, weight="bold"), text_color="white").pack(pady=(80, 20))
+        ctk.CTkLabel(main_frame, text="Készíts saját, egyedi fotókönyvet egyszerű lépésekkel!", font=ctk.CTkFont(size=18), text_color="white").pack(pady=(0, 60))
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         button_frame.pack(expand=True)
+        button_style = {'width': 350, 'height': 60, 'font': ctk.CTkFont(size=16, weight="bold"), 'corner_radius': 15, 'fg_color': self.colors['card_bg'], 'text_color': self.colors['text_primary'], 'hover_color': '#F0F0F0'}
+        ctk.CTkButton(button_frame, text="🆕 Új projekt létrehozása", command=lambda: self.show_page_selection(is_new_project=True), **button_style).pack(pady=15)
+        ctk.CTkButton(button_frame, text="📁 Korábbi projekt megnyitása", command=self.load_project, **button_style).pack(pady=15)
+        ctk.CTkButton(button_frame, text="🚪 Kilépés", command=self.root.quit, **button_style).pack(pady=15)
+
+    def create_layout_preview(self, parent, layout_count, click_handler=None):
+        """Legenerál egy kis előnézeti képet a layout kártyákhoz zöld négyzetekkel."""
+        preview_frame = ctk.CTkFrame(parent, width=180, height=100, fg_color=self.colors['accent'], corner_radius=15)
+        preview_frame.pack(pady=(20, 10))
+        preview_frame.pack_propagate(False)
+        if click_handler: preview_frame.bind("<Button-1>", click_handler)
+
+        if layout_count == 1:
+            box = ctk.CTkFrame(preview_frame, width=60, height=50, fg_color=self.colors['green_box'], corner_radius=8)
+            box.place(relx=0.5, rely=0.5, anchor="center")
+            if click_handler: box.bind("<Button-1>", click_handler)
+        elif layout_count == 2:
+            box1 = ctk.CTkFrame(preview_frame, width=45, height=50, fg_color=self.colors['green_box'], corner_radius=8)
+            box1.place(relx=0.35, rely=0.5, anchor="center")
+            box2 = ctk.CTkFrame(preview_frame, width=45, height=50, fg_color=self.colors['green_box'], corner_radius=8)
+            box2.place(relx=0.65, rely=0.5, anchor="center")
+            if click_handler:
+                box1.bind("<Button-1>", click_handler)
+                box2.bind("<Button-1>", click_handler)
+        elif layout_count == 4:
+            positions = [(0.35, 0.35), (0.65, 0.35), (0.35, 0.65), (0.65, 0.65)]
+            for (x, y) in positions:
+                box = ctk.CTkFrame(preview_frame, width=35, height=25, fg_color=self.colors['green_box'], corner_radius=6)
+                box.place(relx=x, rely=y, anchor="center")
+                if click_handler: box.bind("<Button-1>", click_handler)
+        else:
+            if layout_count <= 9:
+                if layout_count <= 3: cols, rows = layout_count, 1
+                elif layout_count <= 6: cols, rows = 3, 2
+                else: cols, rows = 3, 3
+                box_width = max(20, 60 // cols)
+                box_height = max(15, 40 // rows)
+                for i in range(layout_count):
+                    row, col = i // cols, i % cols
+                    start_x, start_y = 0.5 - (cols - 1) * 0.15, 0.5 - (rows - 1) * 0.15
+                    x, y = start_x + (col * 0.3), start_y + (row * 0.3)
+                    box = ctk.CTkFrame(preview_frame, width=box_width, height=box_height, fg_color=self.colors['green_box'], corner_radius=4)
+                    box.place(relx=x, rely=y, anchor="center")
+                    if click_handler: box.bind("<Button-1>", click_handler)
+            else:
+                count_label = ctk.CTkLabel(preview_frame, text=f"{layout_count}\nkép", font=ctk.CTkFont(size=16, weight="bold"), text_color=self.colors['green_box'])
+                count_label.place(relx=0.5, rely=0.5, anchor="center")
+                if click_handler: count_label.bind("<Button-1>", click_handler)
+
+    def show_page_selection(self, is_new_project=False):
+        """Felépíti a layout-választó képernyőt. Megkülönbözteti az új projektet a meglévő oldal módosításától."""
+        if is_new_project:
+            self._reset_project_state()
         
-        button_width = 20
-        button_height = 2
-        button_font = ("Arial", 11)
+        self.selected_layout_card = None 
         
-        # Projekt elmentése
-        save_btn = tk.Button(button_frame, text="Projekt mentése",
-                            width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
-                            command=self.save_project)
-        save_btn.pack(pady=15)
-        
-        # Projekt betöltése
-        load_btn = tk.Button(button_frame, text="Projekt betöltése",
-                            width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
-                            command=self.load_project)
-        load_btn.pack(pady=15)
-        
-        # Fotókönyv exportálása PDF-be
-        export_btn = tk.Button(button_frame, text="Projekt exportálása",
-                              width=button_width, height=button_height,
-                              font=button_font, bg='#E8E8E8', fg='#888888',
-                              command=self.show_page_selection)
-        export_btn.pack(pady=15)
-        
-        # Vissza a főmenübe
-        back_btn = tk.Button(button_frame, text="Vissza a főmenübe",
-                            width=button_width, height=button_height,
-                            font=button_font, bg='#E8E8E8', fg='#888888',
-                            command=self.create_main_menu)
-        back_btn.pack(pady=15)
-    
-    def show_page_selection(self):
-        """Itt lehet kiválasztani hogy hány kép legyen egy oldalon"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # Cím a lap tetején
-        title_label = tk.Label(self.root, text="Oldalnézet kiválasztása", 
-                              font=("Arial", 18, "bold"), bg='#C4A484', fg='white')
-        title_label.pack(pady=30)
-        
-        # Itt lesznek a layout opciók
-        layout_frame = tk.Frame(self.root, bg='#C4A484')
+        self.clear_window()
+        main_frame = ctk.CTkFrame(self.root, fg_color=self.colors['bg_primary'], corner_radius=0)
+        main_frame.pack(fill="both", expand=True)
+        ctk.CTkLabel(main_frame, text="Oldalnézet kiválasztása", font=ctk.CTkFont(size=32, weight="bold"), text_color="white").pack(pady=(50, 40))
+        layout_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         layout_frame.pack(expand=True)
+        cards_frame = ctk.CTkFrame(layout_frame, fg_color="transparent")
+        cards_frame.pack()
+        layouts = [{"name": "1 kép", "value": 1}, {"name": "2 kép", "value": 2}, {"name": "4 kép", "value": 4}]
+        self.layout_cards = []
+        first_row = ctk.CTkFrame(cards_frame, fg_color="transparent")
+        first_row.pack(pady=10)
+        for i, layout in enumerate(layouts):
+            card = ctk.CTkFrame(first_row, width=220, height=180, fg_color=self.colors['card_bg'], corner_radius=20)
+            card.grid(row=0, column=i, padx=25, pady=20)
+            card.pack_propagate(False)
+            name_label = ctk.CTkLabel(card, text=layout["name"], font=ctk.CTkFont(size=16, weight="bold"), text_color=self.colors['text_primary'])
+            name_label.pack(pady=(0, 15))
+            def make_click_handler(value, card_widget): return lambda e: self.select_layout(value, card_widget)
+            click_handler = make_click_handler(layout["value"], card)
+            card.bind("<Button-1>", click_handler)
+            name_label.bind("<Button-1>", click_handler)
+            self.create_layout_preview(card, layout["value"], click_handler)
+            self.layout_cards.append(card)
+        second_row = ctk.CTkFrame(cards_frame, fg_color="transparent")
+        second_row.pack(pady=10)
+        self.custom_card = ctk.CTkFrame(second_row, width=320, height=220, fg_color=self.colors['card_bg'], corner_radius=20)
+        self.custom_card.pack()
+        self.custom_card.pack_propagate(False)
+        custom_title = ctk.CTkLabel(self.custom_card, text="Egyéni mennyiség", font=ctk.CTkFont(size=18, weight="bold"), text_color=self.colors['text_primary'])
+        custom_title.pack(pady=(15, 10))
+        count_frame = ctk.CTkFrame(self.custom_card, fg_color="transparent")
+        count_frame.pack(pady=10)
+        ctk.CTkLabel(count_frame, text="Képek száma:", font=ctk.CTkFont(size=14), text_color=self.colors['text_primary']).pack(side="left", padx=(0, 10))
+        self.custom_spinbox = ctk.CTkFrame(count_frame, fg_color="transparent")
+        self.custom_spinbox.pack(side="left")
+        ctk.CTkButton(self.custom_spinbox, text="−", width=30, height=30, font=ctk.CTkFont(size=16, weight="bold"), command=self.decrease_custom_count, fg_color=self.colors['accent'], hover_color='#8A9654').pack(side="left")
+        self.custom_count_label = ctk.CTkLabel(self.custom_spinbox, text=str(self.custom_image_count), font=ctk.CTkFont(size=16, weight="bold"), text_color=self.colors['text_primary'], width=40)
+        self.custom_count_label.pack(side="left", padx=5)
+        ctk.CTkButton(self.custom_spinbox, text="+", width=30, height=30, font=ctk.CTkFont(size=16, weight="bold"), command=self.increase_custom_count, fg_color=self.colors['accent'], hover_color='#8A9654').pack(side="left")
+        self.custom_preview_frame = ctk.CTkFrame(self.custom_card, fg_color="transparent")
+        self.custom_preview_frame.pack(pady=15)
+        self.update_custom_preview()
+        ctk.CTkButton(self.custom_card, text="Egyéni layout kiválasztása", command=self.select_custom_layout, width=200, height=35, font=ctk.CTkFont(size=14, weight="bold"), corner_radius=10, fg_color=self.colors['accent'], hover_color='#8A9654').pack(pady=10)
+        custom_click_handler = lambda e: self.select_custom_layout()
+        self.custom_card.bind("<Button-1>", custom_click_handler)
+        custom_title.bind("<Button-1>", custom_click_handler)
+        ctk.CTkButton(main_frame, text="🔧 Tovább a szerkesztőbe", command=self.proceed_to_editor, width=250, height=50, font=ctk.CTkFont(size=16, weight="bold"), corner_radius=15, fg_color=self.colors['card_bg'], text_color=self.colors['text_primary'], hover_color='#F0F0F0').pack(pady=40)
+
+    def select_layout(self, layout_value, card_widget):
+        """Kezeli a layout kártyára való kattintást, vizuálisan jelöli a választást."""
+        if self.selected_layout_card: self.selected_layout_card.configure(fg_color=self.colors['card_bg'])
+        self.current_layout = layout_value
+        self.selected_layout_card = card_widget
+        card_widget.configure(fg_color=self.colors['selected_card'])
+        if hasattr(self, 'custom_card') and self.custom_card is not card_widget: self.custom_card.configure(fg_color=self.colors['card_bg'])
+
+    def select_custom_layout(self):
+        """Kezeli az egyéni layout kártyára való kattintást."""
+        if self.selected_layout_card: self.selected_layout_card.configure(fg_color=self.colors['card_bg'])
+        for card in self.layout_cards: card.configure(fg_color=self.colors['card_bg'])
+        self.current_layout = self.custom_image_count
+        self.selected_layout_card = self.custom_card
+        self.custom_card.configure(fg_color=self.colors['selected_card'])
+
+    def decrease_custom_count(self):
+        """Csökkenti a képek számát az egyéni layoutban."""
+        if self.custom_image_count > 1:
+            self.custom_image_count -= 1
+            self.custom_count_label.configure(text=str(self.custom_image_count))
+            self.update_custom_preview()
+            if self.selected_layout_card == self.custom_card: self.current_layout = self.custom_image_count
+
+    def increase_custom_count(self):
+        """Növeli a képek számát az egyéni layoutban."""
+        if self.custom_image_count < 20:
+            self.custom_image_count += 1
+            self.custom_count_label.configure(text=str(self.custom_image_count))
+            self.update_custom_preview()
+            if self.selected_layout_card == self.custom_card: self.current_layout = self.custom_image_count
+
+    def update_custom_preview(self):
+        """Frissíti az egyéni layout előnézeti képét."""
+        for widget in self.custom_preview_frame.winfo_children(): widget.destroy()
+        self.create_layout_preview(self.custom_preview_frame, self.custom_image_count, click_handler=lambda e: self.select_custom_layout())
+
+    def proceed_to_editor(self):
+        """Továbbnavigál a szerkesztőbe, létrehozza vagy módosítja az oldalt a választott layout alapján."""
+        if not self.selected_layout_card:
+            messagebox.showwarning("Figyelem", "Kérjük válassz egy layout-ot!")
+            return
         
-        # 3 féle layout: 1, 2 vagy 4 kép
-        layouts = [
-            ("1 kép", lambda: self.select_layout(1)),
-            ("2 kép", lambda: self.select_layout(2)), 
-            ("4 kép", lambda: self.select_layout(4))
-        ]
+        page_data = {'layout': self.current_layout, 'texts': [], 'background': None}
         
-        layout_container = tk.Frame(layout_frame, bg='#C4A484')
-        layout_container.pack()
+        if not self.pages: # Ha ez az első oldal (új projekt).
+            page_data['photos'] = [None] * self.current_layout
+            self.pages = [page_data]
+            self.current_page = 0
+        else: # Ha egy meglévő oldal layoutját módosítjuk.
+            old_photos = self.pages[self.current_page]['photos']
+            new_photos = [None] * self.current_layout
+            # Megpróbáljuk átmenteni a képeket az új layoutba.
+            for i in range(min(len(old_photos), len(new_photos))):
+                new_photos[i] = old_photos[i]
+            page_data['photos'] = new_photos
+            self.pages[self.current_page] = page_data
         
-        for i, (text, command) in enumerate(layouts):
-            # Layout előnézeti keret
-            preview_frame = tk.Frame(layout_container, bg='#E8E8E8', width=200, height=150)
-            preview_frame.grid(row=0, column=i, padx=20, pady=10)
-            preview_frame.pack_propagate(False)
+        self.show_photo_editor()
+
+    def clear_window(self):
+        """Letörli az összes widgetet a fő ablakról."""
+        for widget in self.root.winfo_children(): widget.destroy()
+
+    def create_photo_layout(self, parent_frame, page_data):
+        """Dinamikusan felépíti a képhelyőrzők rácsát a szerkesztőben a megadott layout alapján."""
+        for widget in parent_frame.winfo_children(): widget.destroy()
+        self.photo_frames.clear()
+        self._disable_sliders()
+        num_photos = page_data['layout']
+        
+        if num_photos == 1:
+            parent_frame.grid_rowconfigure(0, weight=1)
+            parent_frame.grid_columnconfigure(0, weight=1)
+            photo_frame = ctk.CTkFrame(parent_frame, fg_color="#CCCCCC", corner_radius=10)
+            photo_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+            photo_frame.grid_propagate(False) # Megakadályozza, hogy a kép átméretezze a keretet.
+            self.photo_frames.append(photo_frame)
+            self.display_photo_placeholder(photo_frame, page_data['photos'][0], 0)
+        elif num_photos == 2:
+            parent_frame.grid_rowconfigure(0, weight=1)
+            parent_frame.grid_columnconfigure((0, 1), weight=1)
+            frame1 = ctk.CTkFrame(parent_frame, fg_color="#CCCCCC", corner_radius=10)
+            frame1.grid(row=0, column=0, sticky="nsew", padx=5, pady=10)
+            frame1.grid_propagate(False)
+            self.photo_frames.append(frame1)
+            self.display_photo_placeholder(frame1, page_data['photos'][0], 0)
+            frame2 = ctk.CTkFrame(parent_frame, fg_color="#CCCCCC", corner_radius=10)
+            frame2.grid(row=0, column=1, sticky="nsew", padx=5, pady=10)
+            frame2.grid_propagate(False)
+            self.photo_frames.append(frame2)
+            self.display_photo_placeholder(frame2, page_data['photos'][1], 1)
+        else: # Rácsos elrendezés 3+ kép esetén
+            side_length = int(num_photos**0.5)
+            cols = side_length if side_length > 0 and side_length**2 >= num_photos else side_length + 1
+            if num_photos == 3: cols = 3
+            if cols == 0: cols = 1
+            rows = (num_photos + cols - 1) // cols
+            for c in range(cols): parent_frame.grid_columnconfigure(c, weight=1)
+            for r in range(rows): parent_frame.grid_rowconfigure(r, weight=1)
+            for i in range(num_photos):
+                row, col = i // cols, i % cols
+                photo_frame = ctk.CTkFrame(parent_frame, fg_color="#CCCCCC", corner_radius=10)
+                photo_frame.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
+                photo_frame.grid_propagate(False)
+                self.photo_frames.append(photo_frame)
+                self.display_photo_placeholder(photo_frame, page_data['photos'][i], i)
+
+    def display_photo_placeholder(self, parent_frame, photo_path, photo_index, is_update=False):
+        """Megjelenít egy képet vagy egy "Kép hozzáadása" gombot a kép helyén."""
+        if not is_update:
+            for widget in parent_frame.winfo_children(): widget.destroy()
+        if not photo_path or not os.path.exists(photo_path):
+            add_btn = ctk.CTkButton(parent_frame, text="Kép hozzáadása", fg_color=self.colors['accent'], hover_color='#8A9654', command=lambda idx=photo_index: self.add_photo_to_slot(idx))
+            add_btn.place(relx=0.5, rely=0.5, anchor="center")
+            return
+        try:
+            key = (self.current_page, photo_index)
+            props = self.photo_properties.get(key, {'zoom': 1.0, 'pan_x': 0.5})
+            zoom, pan_x = props['zoom'], props['pan_x']
+            parent_frame.update_idletasks()
+            frame_w, frame_h = parent_frame.winfo_width(), parent_frame.winfo_height()
             
-            # Itt mutatom meg hogy néz ki az adott layout
-            if i == 0:
-                # Egy nagy kép az egész oldalon
-                img_frame = tk.Frame(preview_frame, bg='#A4B068', width=160, height=110)
-                img_frame.pack(padx=20, pady=20)
-            elif i == 1:
-                # Két kép egymás mellett
-                img_container = tk.Frame(preview_frame, bg='#E8E8E8')
-                img_container.pack(pady=20)
-                img1 = tk.Frame(img_container, bg='#A4B068', width=70, height=90)
-                img1.pack(side=tk.LEFT, padx=5)
-                img2 = tk.Frame(img_container, bg='#A4B068', width=70, height=90)
-                img2.pack(side=tk.LEFT, padx=5)
+            # Fallback, ha a keret mérete még nem ismert
+            if frame_w <= 1 or frame_h <= 1:
+                img = Image.open(photo_path)
+                img.thumbnail((200, 200), Image.LANCZOS)
             else:
-                # Négy kis kép 2x2-es elrendezésben
-                img_container = tk.Frame(preview_frame, bg='#E8E8E8')
-                img_container.pack(pady=15)
-                for row in range(2):
-                    for col in range(2):
-                        img = tk.Frame(img_container, bg='#A4B068', width=60, height=35)
-                        img.grid(row=row, column=col, padx=3, pady=3)
+                original_img = Image.open(photo_path)
+                
+                # Arányos nagyítás a kerethez (cover-szerű logika)
+                img_ratio = original_img.width / original_img.height
+                frame_ratio = frame_w / frame_h
+                
+                if img_ratio > frame_ratio:
+                    new_h = int(frame_h * zoom)
+                    new_w = int(new_h * img_ratio)
+                else:
+                    new_w = int(frame_w * zoom)
+                    new_h = int(new_w / img_ratio)
+
+                if new_w < 1 or new_h < 1: new_w, new_h = frame_w, frame_h
+                
+                zoomed_img = original_img.resize((new_w, new_h), Image.LANCZOS)
+                
+                # Kép kivágása a keret méretére
+                extra_w, extra_h = max(0, zoomed_img.width - frame_w), max(0, zoomed_img.height - frame_h)
+                crop_x, crop_y = int(extra_w * pan_x), int(extra_h / 2)
+                
+                img = zoomed_img.crop((crop_x, crop_y, crop_x + frame_w, crop_y + frame_h))
             
-            # Layout neve alul
-            select_label = tk.Label(layout_container, text=text, 
-                                   font=("Arial", 10), bg='#C4A484', fg='white')
-            select_label.grid(row=1, column=i, pady=5)
+            img_tk = ImageTk.PhotoImage(img)
             
-            # Ha rákattintanak akkor kiválasztódik
-            preview_frame.bind("<Button-1>", lambda e, cmd=command: cmd())
-            for child in preview_frame.winfo_children():
-                child.bind("<Button-1>", lambda e, cmd=command: cmd())
-        
-        # Ezzel a gombbal lehet továbblépni
-        apply_btn = tk.Button(self.root, text="🔧 Kiválaszt és alkalmaz",
-                             font=("Arial", 11), bg='#E8E8E8', fg='#888888',
-                             command=self.show_photo_editor)
-        apply_btn.pack(pady=20)
-    
-    def show_photo_editor(self):
-        """Itt történik a varázslat - ide lehet fotókat rakni és szerkeszteni"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # Fő tároló az egész szerkesztőnek
-        main_frame = tk.Frame(self.root, bg='#C4A484')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Bal oldal - itt látszanak az oldalak
-        left_panel = tk.Frame(main_frame, bg='#C4A484', width=200)
-        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
-        left_panel.pack_propagate(False)
-        
-        # Oldalak címe
-        pages_label = tk.Label(left_panel, text="Oldalak", 
-                              font=("Arial", 14, "bold"), bg='#C4A484', fg='white')
-        pages_label.pack(pady=10)
-        
-        # Itt látszanak az oldalak kis előnézetben
-        for i in range(1, 3):
-            page_frame = tk.Frame(left_panel, bg='#E8E8E8', width=180, height=120)
-            page_frame.pack(pady=5)
-            page_frame.pack_propagate(False)
-            
-            page_label = tk.Label(page_frame, text=f"{i}. oldal", 
-                                 font=("Arial", 8), bg='#E8E8E8', fg='#888888')
-            page_label.pack(side=tk.BOTTOM)
-        
-        # Új oldal hozzáadása gomb (+ jel)
-        add_page_frame = tk.Frame(left_panel, bg='#E8E8E8', width=180, height=120)
-        add_page_frame.pack(pady=5)
-        add_page_frame.pack_propagate(False)
-        
-        add_btn = tk.Label(add_page_frame, text="+", 
-                          font=("Arial", 24), bg='#E8E8E8', fg='#A4B068', cursor="hand2")
-        add_btn.pack(expand=True)
-        add_btn.bind("<Button-1>", lambda e: self.add_new_page())
-        
-        # Középső rész - itt szerkesztem a fotókönyvet
-        center_panel = tk.Frame(main_frame, bg='#C4A484')
-        center_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
-        
-        # Fotókönyv címe
-        book_label = tk.Label(center_panel, text="Fotókönyv", 
-                             font=("Arial", 18, "bold"), bg='#C4A484', fg='white')
-        book_label.pack(pady=10)
-        
-        # Itt vannak a fotók helye
-        photo_container = tk.Frame(center_panel, bg='#C4A484')
-        photo_container.pack(expand=True)
-        
-        # Két oldal a fotókönyvben
-        for i in range(2):
-            photo_frame = tk.Frame(photo_container, bg='#E8E8E8', width=350, height=250)
-            photo_frame.pack(side=tk.LEFT, padx=10, pady=20)
-            photo_frame.pack_propagate(False)
-            
-            # Itt lesz a fotó
-            photo_area = tk.Frame(photo_frame, bg='#A4B068', width=310, height=200)
-            photo_area.pack(pady=20)
-            
-            if i == 0:
-                # Bal oldali fotó beállításai
-                controls_frame = tk.Frame(photo_container, bg='#C4A484')
-                controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10)
-                
-                # Fotó feltöltése gomb
-                add_photo_btn = tk.Button(controls_frame, text="Fotó hozzáadása ehhez az oldalhoz",
-                                         font=("Arial", 9), bg='#E8E8E8', fg='#888888',
-                                         command=self.add_photo)
-                add_photo_btn.pack(pady=5)
-                
-                # Méret állítása csúszkával
-                size_label = tk.Label(controls_frame, text="Méretezés", 
-                                     font=("Arial", 10), bg='#C4A484', fg='white')
-                size_label.pack(pady=(20, 5))
-                
-                size_scale = tk.Scale(controls_frame, from_=0, to=100, orient=tk.HORIZONTAL,
-                                     bg='#C4A484', fg='white', length=200)
-                size_scale.set(35)
-                size_scale.pack()
-                
-                # Pozíció állítása csúszkával
-                pos_label = tk.Label(controls_frame, text="Pozíció", 
-                                    font=("Arial", 10), bg='#C4A484', fg='white')
-                pos_label.pack(pady=(20, 5))
-                
-                pos_scale = tk.Scale(controls_frame, from_=0, to=100, orient=tk.HORIZONTAL,
-                                    bg='#C4A484', fg='white', length=200)
-                pos_scale.set(35)
-                pos_scale.pack()
-                
+            # Kép frissítése vagy létrehozása
+            if is_update and len(parent_frame.winfo_children()) > 0:
+                img_label = parent_frame.winfo_children()[0]
+                img_label.configure(image=img_tk)
             else:
-                # Jobb oldali fotó extra beállításai
-                right_controls = tk.Frame(photo_container, bg='#C4A484')
-                right_controls.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
-                
-                # Extra funkciók gombjai
-                bg_buttons = ["Háttér beállítása", "Szöveg hozzáadása", "Keret hozzáadása"]
-                for btn_text in bg_buttons:
-                    btn = tk.Button(right_controls, text=btn_text,
-                                   font=("Arial", 9), bg='#E8E8E8', fg='#888888',
-                                   width=15)
-                    btn.pack(pady=5)
-        
-        # Alsó eszköztár
-        bottom_panel = tk.Frame(self.root, bg='#C4A484', height=60)
-        bottom_panel.pack(side=tk.BOTTOM, fill=tk.X)
-        bottom_panel.pack_propagate(False)
-        
-        # Fontos gombok alul (mentés, betöltés stb.)
-        toolbar_buttons = [
-            ("Mentés", self.save_project),
-            ("Betöltés", self.load_project), 
-            ("Exportálás", self.export_project),
-            ("Főmenü", self.create_main_menu)
-        ]
-        toolbar_frame = tk.Frame(bottom_panel, bg='#C4A484')
-        toolbar_frame.pack(expand=True)
-        
-        for btn_text, command in toolbar_buttons:
-            btn = tk.Button(toolbar_frame, text=btn_text,
-                           font=("Arial", 10), bg='#E8E8E8', fg='#888888',
-                           command=command)
-            btn.pack(side=tk.LEFT, padx=10, pady=15)
+                img_label = ctk.CTkLabel(parent_frame, image=img_tk, text="")
+                img_label.place(relx=0.5, rely=0.5, anchor="center")
+                img_label.bind("<Button-1>", lambda e, idx=photo_index: self._select_photo(idx))
+            
+            img_label.image = img_tk # Referencia mentése a garbage collector ellen.
+        except Exception as e:
+            print(f"--- KÉPMEGJELENÍTÉSI HIBA ---\nFájl: {photo_path}\nHiba: {e}\n{traceback.format_exc()}\n-----------------------------")
+            if not parent_frame.winfo_children():
+                ctk.CTkLabel(parent_frame, text="Hiba a kép\nbetöltésekor", text_color="red").place(relx=0.5, rely=0.5, anchor="center")
+
+    def add_photo_to_slot(self, photo_index):
+        """Megnyit egy fájlválasztót és hozzáadja a képet a megfelelő helyre."""
+        filename = filedialog.askopenfilename(title="Válassz fotót", filetypes=[("Képfájlok", "*.jpg *.jpeg *.png *.gif *.bmp")])
+        if filename:
+            self.pages[self.current_page]['photos'][photo_index] = filename
+            if filename not in self.uploaded_photos: self.uploaded_photos.append(filename)
+            self.show_photo_editor()
     
-    def select_layout(self, layout_type):
-        """Kiválasztja hogy milyen layout legyen (hány kép)"""
-        layout_names = {1: "egy képes", 2: "két képes", 4: "négy képes"}
-        messagebox.showinfo("Layout", f"{layout_names[layout_type]} layout kiválasztva")
-        # Itt állítom be a layout típusát
-        self.current_layout = layout_type
-    
+    def select_page(self, page_idx):
+        """Kiválaszt egy oldalt a bal oldali listából és frissíti a szerkesztőt."""
+        if 0 <= page_idx < len(self.pages):
+            self.current_page = page_idx
+            self.show_photo_editor()
+        
     def add_new_page(self):
-        """Új oldalt ad hozzá a fotókönyvhöz"""
-        messagebox.showinfo("Új oldal", "Új oldal hozzáadva a fotókönyvhöz!")
-        # Itt csinálnám meg az új oldal létrehozását
+        """Hozzáad egy új, üres oldalt a könyvhöz."""
+        if not self.pages:
+            self.pages.append({'layout': 1, 'photos': [None], 'texts': [], 'background': None})
+        else:
+            last_layout = self.pages[-1]['layout']
+            self.pages.append({'layout': last_layout, 'photos': [None] * last_layout, 'texts': [], 'background': None})
+        self.current_page = len(self.pages) - 1
+        self.show_photo_editor()
     
-    def create_layout1(self):
-        """Layout 1 használata - ezt még régebben csináltam"""
-        self.select_layout(1)
-    
-    def create_layout2(self):
-        """Layout 2 használata - ezt még régebben csináltam"""
-        self.select_layout(2)
-    
-    def create_layout3(self):
-        """Layout 3 használata - ezt még régebben csináltam"""
-        self.select_layout(4)
-    
-    def add_photo(self):
-        """Fotót ad hozzá a projekthez"""
-        filename = filedialog.askopenfilename(
-            title="Válassz fotót",
-            filetypes=[("Képfájlok", "*.jpg *.jpeg *.png *.gif *.bmp")]
-        )
-        if filename:
-            messagebox.showinfo("Fotó", f"Fotó hozzáadva: {os.path.basename(filename)}")
-    
+    def change_layout(self): 
+        """Elindítja a layout-váltás folyamatát a meglévő oldalhoz."""
+        self.show_page_selection(is_new_project=False)
+
+    def delete_page(self):
+        """Törli az aktuálisan kiválasztott oldalt."""
+        if len(self.pages) > 1:
+            if messagebox.askyesno("Oldal törlése", f"Biztosan törölni szeretnéd a(z) {self.current_page + 1}. oldalt?"):
+                del self.pages[self.current_page]
+                if self.current_page >= len(self.pages): self.current_page = len(self.pages) - 1
+                self.show_photo_editor()
+        else:
+            messagebox.showwarning("Utolsó oldal", "Nem törölheted az utolsó oldalt!")
+
+    def show_photo_editor(self):
+        """Felépíti a teljes szerkesztőfelületet a panelekkel és eszközökkel."""
+        self.clear_window()
+        main_frame = ctk.CTkFrame(self.root, fg_color=self.colors['bg_primary'], corner_radius=0)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        current_page_data = self.pages[self.current_page]
+        title_text = f"Fotókönyv szerkesztő - Oldal {self.current_page + 1} ({current_page_data['layout']} képes elrendezés)"
+        ctk.CTkLabel(main_frame, text=title_text, font=ctk.CTkFont(size=28, weight="bold"), text_color="white").pack(pady=(10, 20))
+        
+        workspace = ctk.CTkFrame(main_frame, fg_color="transparent")
+        workspace.pack(fill="both", expand=True)
+        
+        # --- Panelek felépítése ---
+        left_panel = ctk.CTkFrame(workspace, width=220, fg_color=self.colors['card_bg'], corner_radius=20)
+        left_panel.pack(side="left", fill="y", padx=(0, 15))
+        left_panel.pack_propagate(False)
+        ctk.CTkLabel(left_panel, text="Oldalak", font=ctk.CTkFont(size=18, weight="bold"), text_color=self.colors['text_primary']).pack(pady=(20, 15))
+        pages_scroll = ctk.CTkScrollableFrame(left_panel, fg_color="transparent")
+        pages_scroll.pack(expand=True, fill="both", pady=10, padx=10)
+        for i, page in enumerate(self.pages):
+            page_frame = ctk.CTkFrame(pages_scroll, height=90, fg_color=self.colors['accent'] if i == self.current_page else self.colors['bg_secondary'], corner_radius=15)
+            page_frame.pack(pady=5, fill="x")
+            page_frame.pack_propagate(False)
+            page_label = ctk.CTkLabel(page_frame, text=f"{i + 1}. oldal\n({page['layout']} kép)", font=ctk.CTkFont(size=11), text_color="white")
+            page_label.pack(expand=True)
+            def make_handler(idx): return lambda e: self.select_page(idx)
+            handler = make_handler(i)
+            page_frame.bind("<Button-1>", handler)
+            page_label.bind("<Button-1>", handler)
+        ctk.CTkButton(left_panel, text="+ Új oldal", command=self.add_new_page, height=40, font=ctk.CTkFont(size=14, weight="bold"), corner_radius=15, fg_color=self.colors['accent'], hover_color='#8A9654').pack(pady=15, padx=10, fill="x")
+        
+        right_panel = ctk.CTkFrame(workspace, width=260, fg_color=self.colors['card_bg'], corner_radius=20)
+        right_panel.pack(side="right", fill="y", padx=(0,0))
+        right_panel.pack_propagate(False)
+        ctk.CTkLabel(right_panel, text="Eszközök", font=ctk.CTkFont(size=18, weight="bold"), text_color=self.colors['text_primary']).pack(pady=(20, 15))
+        
+        slider_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        slider_frame.pack(pady=10, fill="x", padx=20)
+        ctk.CTkLabel(slider_frame, text="Méret (Zoom)", font=ctk.CTkFont(size=12)).pack()
+        self.zoom_slider = ctk.CTkSlider(slider_frame, from_=1.0, to=3.0, command=self._update_photo_properties)
+        self.zoom_slider.pack(fill="x", padx=5, pady=(0, 10))
+        ctk.CTkLabel(slider_frame, text="Vízszintes pozíció", font=ctk.CTkFont(size=12)).pack()
+        self.pan_x_slider = ctk.CTkSlider(slider_frame, from_=0.0, to=1.0, command=self._update_photo_properties)
+        self.pan_x_slider.pack(fill="x", padx=5, pady=(0, 10))
+        
+        tools_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        tools_frame.pack(pady=10, fill="x", padx=20)
+        tools = [("📷 Feltöltött fotók", self.view_uploaded_photos), ("🎨 Háttér", self.set_background), ("📝 Szöveg", self.add_text), ("🖼️ Keret", self.add_frame), ("🔄 Layout váltás", self.change_layout), ("🗑️ Oldal törlése", self.delete_page)]
+        for text, command in tools:
+            ctk.CTkButton(tools_frame, text=text, command=command, height=35, font=ctk.CTkFont(size=12), corner_radius=10, fg_color=self.colors['button_bg'], text_color=self.colors['text_secondary'], hover_color='#F0F0F0').pack(pady=3, fill="x")
+
+        center_panel = ctk.CTkFrame(workspace, fg_color=current_page_data.get('background') or self.colors['card_bg'], corner_radius=20)
+        center_panel.pack(side="left", fill="both", expand=True, padx=15)
+        photo_container = ctk.CTkFrame(center_panel, fg_color="transparent")
+        photo_container.pack(expand=True, fill="both", padx=10, pady=10)
+        self.create_photo_layout(photo_container, current_page_data)
+        
+        toolbar = ctk.CTkFrame(main_frame, height=70, fg_color=self.colors['card_bg'], corner_radius=15)
+        toolbar.pack(fill="x", pady=(20, 0))
+        toolbar.pack_propagate(False)
+        toolbar_buttons = [("💾 Mentés", self.save_project), ("📁 Betöltés", self.load_project), ("📤 Exportálás", self.export_project), ("🔙 Layout választás", lambda: self.show_page_selection(is_new_project=False)), ("🏠 Főmenü", self.create_main_menu)]
+        buttons_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        buttons_frame.pack(expand=True)
+        for text, command in toolbar_buttons:
+            ctk.CTkButton(buttons_frame, text=text, command=command, width=140, height=40, font=ctk.CTkFont(size=12), corner_radius=10, fg_color=self.colors['button_bg'], text_color=self.colors['text_secondary'], hover_color='#F0F0F0').pack(side="left", padx=10, pady=15)
+
+    def view_uploaded_photos(self):
+        """Megjeleníti a már feltöltött fotókat egy külön ablakban."""
+        if not self.uploaded_photos: messagebox.showinfo("Nincs feltöltött fotó", "Még nem töltöttél fel egyetlen fotót sem."); return
+        photo_viewer_window = ctk.CTkToplevel(self.root)
+        photo_viewer_window.title("Feltöltött fotók")
+        photo_viewer_window.geometry("800x600")
+        photo_viewer_window.transient(self.root)
+        photo_viewer_window.grab_set()
+        ctk.CTkLabel(photo_viewer_window, text="Feltöltött fotók", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=15)
+        photos_frame = ctk.CTkScrollableFrame(photo_viewer_window, fg_color="transparent")
+        photos_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        for i, photo_path in enumerate(self.uploaded_photos):
+            try:
+                img = Image.open(photo_path)
+                img.thumbnail((150, 150), Image.LANCZOS)
+                img_tk = ImageTk.PhotoImage(img)
+                img_label = ctk.CTkLabel(photos_frame, image=img_tk, text=os.path.basename(photo_path), compound="top", font=ctk.CTkFont(size=10))
+                img_label.image = img_tk
+                img_label.grid(row=i // 4, column=i % 4, padx=10, pady=10)
+            except Exception as e:
+                print(f"Hiba a feltöltött kép betöltésekor {photo_path}: {e}")
+
     def save_project(self):
-        """Elmenti a projektet fájlba"""
-        filename = filedialog.asksaveasfilename(
-            title="Projekt mentése",
-            defaultextension=".lolaba",
-            filetypes=[("LoLaBa projekt", "*.lolaba"), ("Minden fájl", "*.*")]
-        )
-        if filename:
-            messagebox.showinfo("Mentés", f"Projekt mentve: {os.path.basename(filename)}")
+        """Projekt mentése (jelenleg csak szimulált)."""
+        filename = filedialog.asksaveasfilename(title="Projekt mentése", defaultextension=".lolaba", filetypes=[("LoLaBa projekt", "*.lolaba")])
+        if filename: messagebox.showinfo("Mentés", f"Projekt mentve: {os.path.basename(filename)}")
     
     def load_project(self):
-        """Betölt egy korábban mentett projektet"""
-        filename = filedialog.askopenfilename(
-            title="Projekt betöltése",
-            filetypes=[("LoLaBa projekt", "*.lolaba"), ("Minden fájl", "*.*")]
-        )
+        """Projekt betöltése (jelenleg csak szimulált)."""
+        filename = filedialog.askopenfilename(title="Projekt betöltése", filetypes=[("LoLaBa projekt", "*.lolaba")])
         if filename:
+            self._reset_project_state()
+            self.pages = [{'layout': 2, 'photos': [None, None], 'texts': [], 'background': None}]
             messagebox.showinfo("Betöltés", f"Projekt betöltve: {os.path.basename(filename)}")
-            # ha sikerült betölteni akkor rögtön a szerkesztőbe lépek
             self.show_photo_editor()
     
     def export_project(self):
-        """Exportálja a kész fotókönyvet PDF formátumban"""
-        filename = filedialog.asksaveasfilename(
-            title="Projekt exportálása",
-            defaultextension=".pdf",
-            filetypes=[("PDF fájl", "*.pdf"), ("Minden fájl", "*.*")]
-        )
-        if filename:
-            messagebox.showinfo("Exportálás", f"Projekt exportálva: {os.path.basename(filename)}")
+        """Projekt exportálása (jelenleg csak szimulált)."""
+        filename = filedialog.asksaveasfilename(title="Projekt exportálása", defaultextension=".pdf", filetypes=[("PDF fájl", "*.pdf")])
+        if filename: messagebox.showinfo("Exportálás", f"Projekt exportálva: {os.path.basename(filename)}")
+    
+    def set_background(self):
+        """Megnyit egy színválasztó ablakot az aktuális oldal hátterének beállításához."""
+        color_picker = ctk.CTkToplevel(self.root)
+        color_picker.title("Háttérszín választása")
+        color_picker.geometry("320x200")
+        color_picker.transient(self.root)
+        color_picker.grab_set()
+
+        def _apply_background_color(color):
+            self.pages[self.current_page]['background'] = color
+            color_picker.destroy()
+            self.show_photo_editor()
+
+        ctk.CTkLabel(color_picker, text="Válassz egy színt:", font=ctk.CTkFont(size=14)).pack(pady=10)
+        
+        palette_frame = ctk.CTkFrame(color_picker, fg_color="transparent")
+        palette_frame.pack(pady=10, padx=10)
+        colors = ['#FFFFFF', '#F0F0F0', '#D3E3F1', '#D1F0D1', '#F5E6D3', '#E6D3F5', '#FFDDC1', '#FFD1D1']
+        
+        for i, color in enumerate(colors):
+            row, col = i // 4, i % 4
+            color_btn = ctk.CTkButton(palette_frame, text="", fg_color=color, width=40, height=40, corner_radius=8,
+                                      command=lambda c=color: _apply_background_color(c))
+            color_btn.grid(row=row, column=col, padx=10, pady=10)
+            
+        remove_btn = ctk.CTkButton(color_picker, text="Háttér eltávolítása", command=lambda: _apply_background_color(None))
+        remove_btn.pack(pady=10)
+
+    def add_text(self): messagebox.showinfo("Szöveg", "Funkció fejlesztés alatt.")
+    def add_frame(self): messagebox.showinfo("Keret", "Funkció fejlesztés alatt.")
+    
+    def run(self):
+        """Elindítja az alkalmazás fő ciklusát."""
+        self.root.mainloop()
 
 def main():
-    root = tk.Tk()
-    app = FotokonyvGUI(root)
-    root.mainloop()
+    """A program belépési pontja."""
+    app = FotokonyvGUI()
+    app.run()
 
 if __name__ == "__main__":
     main()
