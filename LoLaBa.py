@@ -1,3 +1,4 @@
+
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import os
@@ -21,11 +22,13 @@ class FotokonyvGUI:
             'button_bg': '#E8E8E8',
             'accent': '#A4B068',
             'text_primary': '#333333',
-            'text_secondary': '#666666'
+            'text_secondary': '#666666',
+            'green_box': '#4CAF50'
         }
         
         # Projekt állapot
         self.current_layout = 1
+        self.custom_image_count = 1
         self.pages = []
         
         # Indítás
@@ -92,6 +95,87 @@ class FotokonyvGUI:
                                 **button_style)
         exit_btn.pack(pady=15)
     
+    def create_layout_preview(self, parent, layout_count):
+        """Zöld kockák létrehozása a layout előnézethez"""
+        preview_frame = ctk.CTkFrame(parent,
+                                    width=180,
+                                    height=100,
+                                    fg_color=self.colors['accent'],
+                                    corner_radius=15)
+        preview_frame.pack(pady=(20, 10))
+        preview_frame.pack_propagate(False)
+        
+        # Zöld kockák elhelyezése
+        if layout_count == 1:
+            # 1 kép - egy nagy kocka középen
+            box = ctk.CTkFrame(preview_frame,
+                              width=60,
+                              height=50,
+                              fg_color=self.colors['green_box'],
+                              corner_radius=8)
+            box.place(relx=0.5, rely=0.5, anchor="center")
+            
+        elif layout_count == 2:
+            # 2 kép - két kocka egymás mellett
+            box1 = ctk.CTkFrame(preview_frame,
+                               width=45,
+                               height=50,
+                               fg_color=self.colors['green_box'],
+                               corner_radius=8)
+            box1.place(relx=0.35, rely=0.5, anchor="center")
+            
+            box2 = ctk.CTkFrame(preview_frame,
+                               width=45,
+                               height=50,
+                               fg_color=self.colors['green_box'],
+                               corner_radius=8)
+            box2.place(relx=0.65, rely=0.5, anchor="center")
+            
+        elif layout_count == 4:
+            # 4 kép - 2x2 rács
+            positions = [(0.35, 0.35), (0.65, 0.35), (0.35, 0.65), (0.65, 0.65)]
+            for i, (x, y) in enumerate(positions):
+                box = ctk.CTkFrame(preview_frame,
+                                  width=35,
+                                  height=25,
+                                  fg_color=self.colors['green_box'],
+                                  corner_radius=6)
+                box.place(relx=x, rely=y, anchor="center")
+                
+        else:
+            # Egyéni mennyiség - dinamikus elrendezés
+            if layout_count <= 6:
+                # Soronként 2 vagy 3 kép
+                cols = 3 if layout_count > 4 else 2
+                rows = (layout_count + cols - 1) // cols
+                
+                box_width = 30 if cols == 3 else 40
+                box_height = 20 if rows > 2 else 30
+                
+                for i in range(layout_count):
+                    row = i // cols
+                    col = i % cols
+                    
+                    # Pozíció számítás
+                    x = 0.2 + (col * 0.6 / (cols - 1)) if cols > 1 else 0.5
+                    y = 0.2 + (row * 0.6 / (rows - 1)) if rows > 1 else 0.5
+                    
+                    box = ctk.CTkFrame(preview_frame,
+                                      width=box_width,
+                                      height=box_height,
+                                      fg_color=self.colors['green_box'],
+                                      corner_radius=4)
+                    box.place(relx=x, rely=y, anchor="center")
+            else:
+                # Túl sok kép - jelezzük számmal
+                count_label = ctk.CTkLabel(preview_frame,
+                                          text=f"{layout_count}\nkép",
+                                          font=ctk.CTkFont(size=16, weight="bold"),
+                                          text_color=self.colors['green_box'])
+                count_label.place(relx=0.5, rely=0.5, anchor="center")
+        
+        return preview_frame
+    
     def show_page_selection(self):
         """Layout kiválasztás szép kerekített kártyákkal"""
         self.clear_window()
@@ -119,16 +203,21 @@ class FotokonyvGUI:
         
         # Layout definíciók
         layouts = [
-            {"name": "1 kép", "value": 1, "icon": "🖼️"},
-            {"name": "2 kép", "value": 2, "icon": "🖼️🖼️"},
-            {"name": "4 kép", "value": 4, "icon": "🖼️🖼️\n🖼️🖼️"}
+            {"name": "1 kép", "value": 1},
+            {"name": "2 kép", "value": 2},
+            {"name": "4 kép", "value": 4},
+            {"name": "Egyéni", "value": "custom"}
         ]
         
         self.layout_buttons = []
         
-        for i, layout in enumerate(layouts):
+        # Első sor - alapvető layoutok
+        first_row = ctk.CTkFrame(cards_frame, fg_color="transparent")
+        first_row.pack(pady=10)
+        
+        for i, layout in enumerate(layouts[:3]):
             # Kártya container
-            card = ctk.CTkFrame(cards_frame,
+            card = ctk.CTkFrame(first_row,
                                width=220,
                                height=180,
                                fg_color=self.colors['card_bg'],
@@ -137,20 +226,7 @@ class FotokonyvGUI:
             card.pack_propagate(False)
             
             # Layout előnézet
-            preview_frame = ctk.CTkFrame(card,
-                                        width=180,
-                                        height=100,
-                                        fg_color=self.colors['accent'],
-                                        corner_radius=15)
-            preview_frame.pack(pady=(20, 10))
-            preview_frame.pack_propagate(False)
-            
-            # Layout ikon
-            icon_label = ctk.CTkLabel(preview_frame,
-                                     text=layout["icon"],
-                                     font=ctk.CTkFont(size=20),
-                                     text_color="white")
-            icon_label.pack(expand=True)
+            preview_frame = self.create_layout_preview(card, layout["value"])
             
             # Layout név
             name_label = ctk.CTkLabel(card,
@@ -160,15 +236,92 @@ class FotokonyvGUI:
             name_label.pack(pady=(0, 15))
             
             # Klikkelhetőség
-            def make_click_handler(value):
-                return lambda: self.select_layout(value)
-            
             card.bind("<Button-1>", lambda e, v=layout["value"]: self.select_layout(v))
             preview_frame.bind("<Button-1>", lambda e, v=layout["value"]: self.select_layout(v))
-            icon_label.bind("<Button-1>", lambda e, v=layout["value"]: self.select_layout(v))
             name_label.bind("<Button-1>", lambda e, v=layout["value"]: self.select_layout(v))
             
             self.layout_buttons.append(card)
+        
+        # Második sor - egyéni layout
+        second_row = ctk.CTkFrame(cards_frame, fg_color="transparent")
+        second_row.pack(pady=10)
+        
+        # Egyéni layout kártya
+        custom_card = ctk.CTkFrame(second_row,
+                                  width=320,
+                                  height=220,
+                                  fg_color=self.colors['card_bg'],
+                                  corner_radius=20)
+        custom_card.pack()
+        custom_card.pack_propagate(False)
+        
+        # Egyéni layout cím
+        custom_title = ctk.CTkLabel(custom_card,
+                                   text="Egyéni mennyiség",
+                                   font=ctk.CTkFont(size=18, weight="bold"),
+                                   text_color=self.colors['text_primary'])
+        custom_title.pack(pady=(15, 10))
+        
+        # Kép szám választó
+        count_frame = ctk.CTkFrame(custom_card, fg_color="transparent")
+        count_frame.pack(pady=10)
+        
+        count_label = ctk.CTkLabel(count_frame,
+                                  text="Képek száma:",
+                                  font=ctk.CTkFont(size=14),
+                                  text_color=self.colors['text_primary'])
+        count_label.pack(side="left", padx=(0, 10))
+        
+        self.custom_spinbox = ctk.CTkFrame(count_frame, fg_color="transparent")
+        self.custom_spinbox.pack(side="left")
+        
+        # Csökkentés gomb
+        decrease_btn = ctk.CTkButton(self.custom_spinbox,
+                                    text="−",
+                                    width=30,
+                                    height=30,
+                                    font=ctk.CTkFont(size=16, weight="bold"),
+                                    command=self.decrease_custom_count,
+                                    fg_color=self.colors['accent'],
+                                    hover_color='#8A9654')
+        decrease_btn.pack(side="left")
+        
+        # Szám megjelenítő
+        self.custom_count_label = ctk.CTkLabel(self.custom_spinbox,
+                                              text=str(self.custom_image_count),
+                                              font=ctk.CTkFont(size=16, weight="bold"),
+                                              text_color=self.colors['text_primary'],
+                                              width=40)
+        self.custom_count_label.pack(side="left", padx=5)
+        
+        # Növelés gomb
+        increase_btn = ctk.CTkButton(self.custom_spinbox,
+                                    text="+",
+                                    width=30,
+                                    height=30,
+                                    font=ctk.CTkFont(size=16, weight="bold"),
+                                    command=self.increase_custom_count,
+                                    fg_color=self.colors['accent'],
+                                    hover_color='#8A9654')
+        increase_btn.pack(side="left")
+        
+        # Egyéni előnézet
+        self.custom_preview_frame = ctk.CTkFrame(custom_card, fg_color="transparent")
+        self.custom_preview_frame.pack(pady=15)
+        
+        self.update_custom_preview()
+        
+        # Egyéni layout kiválasztás gomb
+        select_custom_btn = ctk.CTkButton(custom_card,
+                                         text="Egyéni layout kiválasztása",
+                                         command=lambda: self.select_layout("custom"),
+                                         width=200,
+                                         height=35,
+                                         font=ctk.CTkFont(size=14, weight="bold"),
+                                         corner_radius=10,
+                                         fg_color=self.colors['accent'],
+                                         hover_color='#8A9654')
+        select_custom_btn.pack(pady=10)
         
         # Tovább gomb
         continue_btn = ctk.CTkButton(main_frame,
@@ -182,6 +335,29 @@ class FotokonyvGUI:
                                     text_color=self.colors['text_primary'],
                                     hover_color='#F0F0F0')
         continue_btn.pack(pady=40)
+    
+    def decrease_custom_count(self):
+        """Egyéni kép szám csökkentése"""
+        if self.custom_image_count > 1:
+            self.custom_image_count -= 1
+            self.custom_count_label.configure(text=str(self.custom_image_count))
+            self.update_custom_preview()
+    
+    def increase_custom_count(self):
+        """Egyéni kép szám növelése"""
+        if self.custom_image_count < 20:  # Maximum 20 kép
+            self.custom_image_count += 1
+            self.custom_count_label.configure(text=str(self.custom_image_count))
+            self.update_custom_preview()
+    
+    def update_custom_preview(self):
+        """Egyéni előnézet frissítése"""
+        # Régi előnézet törlése
+        for widget in self.custom_preview_frame.winfo_children():
+            widget.destroy()
+        
+        # Új előnézet létrehozása
+        self.create_layout_preview(self.custom_preview_frame, self.custom_image_count)
     
     def show_photo_editor(self):
         """Fotószerkesztő modern megjelenéssel"""
@@ -412,9 +588,13 @@ class FotokonyvGUI:
     
     def select_layout(self, layout_type):
         """Layout kiválasztása"""
-        self.current_layout = layout_type
-        layout_names = {1: "egy képes", 2: "két képes", 4: "négy képes"}
-        messagebox.showinfo("Layout", f"{layout_names[layout_type]} layout kiválasztva")
+        if layout_type == "custom":
+            self.current_layout = self.custom_image_count
+            messagebox.showinfo("Layout", f"Egyéni layout kiválasztva: {self.custom_image_count} kép")
+        else:
+            self.current_layout = layout_type
+            layout_names = {1: "egy képes", 2: "két képes", 4: "négy képes"}
+            messagebox.showinfo("Layout", f"{layout_names[layout_type]} layout kiválasztva")
     
     def add_new_page(self):
         """Új oldal hozzáadása"""
