@@ -4,10 +4,10 @@ import os
 from PIL import Image, ImageDraw, ImageTk, ImageFont, ImageEnhance, ImageFilter
 import traceback
 import json
-import copy # Szükséges a mentéshez
-import random # A Varázslóhoz kell
-import math # A Varázslóhoz és az előnézethez kell
-import re # Szükséges a természetes rendezéshez
+import copy 
+import random 
+import math 
+import re 
 
 # --- Alapbeállítások ---
 ctk.set_appearance_mode("dark")
@@ -41,7 +41,7 @@ class FotokonyvGUI:
             'selected_card': '#556B2F',
             'selected_photo_border': '#4CAF50',
             'selected_text_color': '#007BFF',
-            'canvas_workspace_bg': '#5A5A5A' # Új szín a vászon körüli területnek
+            'canvas_workspace_bg': '#5A5A5A' 
         }
         
         # --- Assets mappa elérési útjának meghatározása ---
@@ -319,7 +319,7 @@ class FotokonyvGUI:
         main_frame.pack(fill="both", expand=True)
         ctk.CTkLabel(main_frame, text="Válassz egy kiinduló elrendezést", font=ctk.CTkFont(size=32, weight="bold"), text_color="white").pack(pady=(50, 20))
         
-        # --- ÚJ: Méretválasztó szekció ---
+        # --- Méretválasztó szekció ---
         if is_new_project:
             size_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
             size_frame.pack(pady=(0, 20))
@@ -616,7 +616,7 @@ class FotokonyvGUI:
             ("📝 Szöveg", self.add_text), 
             ("🖼️ Képkeret", self.add_frame), 
             ("🖼️ Oldalkerete", self.add_page_frame),
-            ("📏 Oldalméret módosítása", self.change_page_size), # ÚJ GOMB
+            ("📏 Oldalméret módosítása", self.change_page_size), 
             ("🔄 Elrendezés váltása", self.change_current_page_layout),
             ("🖼️ Kép cseréje", self._replace_photo),
             ("🔼 Előrehozás", self._bring_photo_forward),
