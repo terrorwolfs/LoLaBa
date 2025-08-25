@@ -86,6 +86,7 @@ class FotokonyvGUI:
         self.photo_properties = {}
         self.text_widgets = []
         self.selected_text_index = None
+        self.page_frame_editor_window = None
         self._drag_data = {}
         self.editor_ui_built = False
         self.widget_to_canvas_item = {}
@@ -1080,56 +1081,66 @@ class FotokonyvGUI:
             messagebox.showwarning("Nincs kiválasztott kép", "Kérlek, először kattints egy képre a szerkesztéshez!")
             return
         if self.frame_editor_window is not None and self.frame_editor_window.winfo_exists():
-            self.frame_editor_window.focus(); return
+            self.frame_editor_window.focus()
+            return
         
         self.frame_editor_window = ctk.CTkToplevel(self.root)
-        self.frame_editor_window.title("Képkeret szerkesztése"); self.frame_editor_window.geometry("350x550")
-        self.frame_editor_window.transient(self.root); self.frame_editor_window.attributes("-topmost", True)
-        
-        ctk.CTkLabel(self.frame_editor_window, text="Beépített keretek", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
-        
-        preset_frame_container = ctk.CTkFrame(self.frame_editor_window)
-        preset_frame_container.pack(pady=5, padx=10, fill="x")
+        self.frame_editor_window.title("Képkeret szerkesztése")
+        self.frame_editor_window.geometry("350x550")
+        self.frame_editor_window.transient(self.root)
+        self.frame_editor_window.attributes("-topmost", True)
 
-        preset_frame_ui = ctk.CTkFrame(preset_frame_container);
+        # --- JAVÍTÁS: Létrehozunk egy fő görgethető keretet ---
+        # Minden mást ebbe a keretbe fogunk pakolni.
+        main_scroll_frame = ctk.CTkScrollableFrame(self.frame_editor_window)
+        main_scroll_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # --------------------------------------------------------
+        
+        ctk.CTkLabel(main_scroll_frame, text="Beépített keretek", font=ctk.CTkFont(weight="bold")).pack(pady=(10, 5))
+        
+        preset_frame_container = ctk.CTkFrame(main_scroll_frame) # A szülő mostantól a main_scroll_frame
+        preset_frame_container.pack(pady=5, padx=5, fill="x")
+
+        preset_frame_ui = ctk.CTkFrame(preset_frame_container)
         preset_frame_ui.pack(pady=5, padx=0, fill="x")
         presets = [("Fekete", "preset_black"), ("Fehér", "preset_white"), ("Arany", "preset_gold")]
         for i, (name, path) in enumerate(presets):
             ctk.CTkButton(preset_frame_ui, text=name, command=lambda p=path: self._apply_frame(p)).grid(row=0, column=i, padx=5, pady=5, sticky="ew")
-        preset_frame_ui.grid_columnconfigure((0,1,2), weight=1)
+        preset_frame_ui.grid_columnconfigure((0, 1, 2), weight=1)
 
         frames_path = os.path.join(self.assets_path, "frames")
         if os.path.exists(frames_path):
-            custom_preset_frame = ctk.CTkFrame(preset_frame_container)
+            custom_preset_frame = ctk.CTkFrame(preset_frame_container) # Ez már lehet sima Frame
             custom_preset_frame.pack(pady=5, padx=0, fill="x")
             preset_files = [f for f in os.listdir(frames_path) if f.lower().endswith('.png')]
             for i, fname in enumerate(preset_files):
                 fpath = os.path.join(frames_path, fname)
                 try:
-                    thumb = ctk.CTkImage(Image.open(fpath), size=(40,40))
+                    thumb = ctk.CTkImage(Image.open(fpath), size=(40, 40))
                     btn = ctk.CTkButton(custom_preset_frame, image=thumb, text="", width=60, height=60, command=lambda p=fpath: self._apply_frame(p))
-                    btn.grid(row=0, column=i, padx=5, pady=5)
+                    btn.grid(row=i // 4, column=i % 4, padx=5, pady=5)
                 except Exception as e:
-                        print(f"Hiba a beépített keret betöltésekor ({fname}): {e}")
+                    print(f"Hiba a beépített keret betöltésekor ({fname}): {e}")
 
-        ctk.CTkButton(self.frame_editor_window, text="Saját keret feltöltése...", command=lambda: self._apply_frame(self._upload_custom_frame_path())).pack(pady=(10, 5), padx=10, fill="x")
-        ctk.CTkLabel(self.frame_editor_window, text="Beállítások", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
+        ctk.CTkButton(main_scroll_frame, text="Saját keret feltöltése...", command=lambda: self._apply_frame(self._upload_custom_frame_path())).pack(pady=(10, 5), padx=5, fill="x")
+        ctk.CTkLabel(main_scroll_frame, text="Beállítások", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
         
-        self.slider_panel = ctk.CTkFrame(self.frame_editor_window); self.slider_panel.pack(pady=5, padx=10, fill="both", expand=True)
+        self.slider_panel = ctk.CTkFrame(main_scroll_frame) # A szülő mostantól a main_scroll_frame
+        self.slider_panel.pack(pady=5, padx=5, fill="both", expand=True)
         ctk.CTkLabel(self.slider_panel, text="Vastagság (beépített kereteknél)").pack()
         self.frame_thickness_slider = ctk.CTkSlider(self.slider_panel, from_=0.01, to=0.2, command=self._update_photo_properties)
-        self.frame_thickness_slider.pack(fill="x", padx=10, pady=(0,10))
+        self.frame_thickness_slider.pack(fill="x", padx=10, pady=(0, 10))
         ctk.CTkLabel(self.slider_panel, text="Méret").pack()
         self.frame_scale_slider = ctk.CTkSlider(self.slider_panel, from_=0.5, to=1.5, command=self._update_photo_properties)
-        self.frame_scale_slider.pack(fill="x", padx=10, pady=(0,10))
+        self.frame_scale_slider.pack(fill="x", padx=10, pady=(0, 10))
         ctk.CTkLabel(self.slider_panel, text="Vízszintes eltolás").pack()
         self.frame_offset_x_slider = ctk.CTkSlider(self.slider_panel, from_=-100, to=100, number_of_steps=200, command=self._update_photo_properties)
-        self.frame_offset_x_slider.pack(fill="x", padx=10, pady=(0,10))
+        self.frame_offset_x_slider.pack(fill="x", padx=10, pady=(0, 10))
         ctk.CTkLabel(self.slider_panel, text="Függőleges eltolás").pack()
         self.frame_offset_y_slider = ctk.CTkSlider(self.slider_panel, from_=-100, to=100, number_of_steps=200, command=self._update_photo_properties)
-        self.frame_offset_y_slider.pack(fill="x", padx=10, pady=(0,10))
+        self.frame_offset_y_slider.pack(fill="x", padx=10, pady=(0, 10))
         
-        ctk.CTkButton(self.frame_editor_window, text="Keret eltávolítása", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: self._apply_frame(None)).pack(pady=10, padx=10, fill="x")
+        ctk.CTkButton(main_scroll_frame, text="Keret eltávolítása", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: self._apply_frame(None)).pack(pady=10, padx=5, fill="x")
         self.update_frame_editor_ui()
 
     def _apply_frame(self, frame_path):
@@ -1165,65 +1176,191 @@ class FotokonyvGUI:
             self.frame_scale_slider.set(1.0); self.frame_offset_x_slider.set(0); self.frame_offset_y_slider.set(0)
             self.frame_thickness_slider.set(0.05)
             
+    # --- KÉPKERET ÉS OLDALKERET METÓDUSOK ---
+# (Helyezd ezeket a függvényeket a többi kerettel kapcsolatos metódus mellé)
+
     def add_page_frame(self):
-        window = ctk.CTkToplevel(self.root)
-        window.title("Oldalkeretet beállítása"); window.geometry("320x400")
-        window.transient(self.root); window.grab_set()
-
-        current_page_data = self.pages[self.current_page]
-        thickness_slider = None
-
-        def _update_thickness(value):
-            if thickness_slider:
-                current_page_data['page_frame_thickness'] = value
+        """Felugró ablakot nyit az oldalkeretet beállításához, méretezési és eltolási opciókkal."""
+        if self.page_frame_editor_window is not None and self.page_frame_editor_window.winfo_exists():
+            self.page_frame_editor_window.focus()
+            return
         
-        def _select_page_frame(path):
-            if path is not None:
-                current_page_data['page_frame_path'] = path
-                if thickness_slider:
-                    current_page_data['page_frame_thickness'] = thickness_slider.get()
-            else:
-                current_page_data.pop('page_frame_path', None)
-                current_page_data.pop('page_frame_thickness', None)
-            
-            window.destroy()
-            self.refresh_editor_view()
+        self.page_frame_editor_window = ctk.CTkToplevel(self.root)
+        self.page_frame_editor_window.title("Oldalkeretet szerkesztése")
+        self.page_frame_editor_window.geometry("350x550")
+        self.page_frame_editor_window.transient(self.root)
+        self.page_frame_editor_window.attributes("-topmost", True)
 
-        ctk.CTkLabel(window, text="Válassz keretet az oldalhoz!", font=ctk.CTkFont(weight="bold")).pack(pady=10)
-        
-        preset_frame_container = ctk.CTkFrame(window, fg_color="transparent")
-        preset_frame_container.pack(pady=5, padx=10, fill="x")
+        # --- JAVÍTÁS: Létrehozunk egy fő görgethető keretet ---
+        main_scroll_frame = ctk.CTkScrollableFrame(self.page_frame_editor_window)
+        main_scroll_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # --------------------------------------------------------
 
-        preset_frame_ui = ctk.CTkFrame(preset_frame_container);
+        ctk.CTkLabel(main_scroll_frame, text="Válassz keretet az oldalhoz!", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+
+        preset_frame_container = ctk.CTkFrame(main_scroll_frame, fg_color="transparent") # A szülő mostantól a main_scroll_frame
+        preset_frame_container.pack(pady=5, padx=5, fill="x")
+
+        preset_frame_ui = ctk.CTkFrame(preset_frame_container)
         preset_frame_ui.pack(pady=5, fill="x")
         presets = [("Fekete", "preset_black"), ("Fehér", "preset_white"), ("Arany", "preset_gold")]
         for i, (name, path) in enumerate(presets):
-            ctk.CTkButton(preset_frame_ui, text=name, command=lambda p=path: _select_page_frame(p)).grid(row=0, column=i, padx=5, pady=5, sticky="ew")
-        preset_frame_ui.grid_columnconfigure((0,1,2), weight=1)
+            ctk.CTkButton(preset_frame_ui, text=name, command=lambda p=path: self._apply_page_frame(p)).grid(row=0, column=i, padx=5, pady=5, sticky="ew")
+        preset_frame_ui.grid_columnconfigure((0, 1, 2), weight=1)
 
         frames_path = os.path.join(self.assets_path, "frames")
         if os.path.exists(frames_path):
-            ctk.CTkLabel(preset_frame_container, text="Beépített keretek", font=ctk.CTkFont(size=12)).pack(pady=(10,0))
-            custom_preset_frame = ctk.CTkScrollableFrame(preset_frame_container, height=80)
+            ctk.CTkLabel(preset_frame_container, text="Beépített keretek", font=ctk.CTkFont(size=12)).pack(pady=(10, 0))
+            custom_preset_frame = ctk.CTkFrame(preset_frame_container) # Ez is lehet sima Frame
             custom_preset_frame.pack(pady=5, fill="x")
             preset_files = [f for f in os.listdir(frames_path) if f.lower().endswith('.png')]
             for i, fname in enumerate(preset_files):
                 fpath = os.path.join(frames_path, fname)
                 try:
-                    thumb = ctk.CTkImage(Image.open(fpath), size=(50,50))
-                    btn = ctk.CTkButton(custom_preset_frame, image=thumb, text="", width=60, height=60, command=lambda p=fpath: _select_page_frame(p))
-                    btn.grid(row=0, column=i, padx=5, pady=5)
+                    thumb = ctk.CTkImage(Image.open(fpath), size=(50, 50))
+                    btn = ctk.CTkButton(custom_preset_frame, image=thumb, text="", width=60, height=60, command=lambda p=fpath: self._apply_page_frame(p))
+                    btn.grid(row=i // 4, column=i % 4, padx=5, pady=5)
                 except Exception as e:
-                        print(f"Hiba a beépített oldalkeret betöltésekor ({fname}): {e}")
+                    print(f"Hiba a beépített oldalkeret betöltésekor ({fname}): {e}")
 
-
-        ctk.CTkLabel(window, text="Keret vastagsága (beépített kereteknél)", font=ctk.CTkFont(size=12)).pack(pady=(10,0))
-        thickness_slider = ctk.CTkSlider(window, from_=0.01, to=0.2, number_of_steps=19, command=_update_thickness)
-        thickness_slider.set(current_page_data.get('page_frame_thickness', 0.05))
-        thickness_slider.pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(main_scroll_frame, text="Saját keret feltöltése...", command=lambda: self._apply_page_frame(self._upload_custom_frame_path())).pack(pady=(10, 5), padx=5, fill="x")
         
-        ctk.CTkButton(window, text="Saját keret feltöltése...", command=lambda: _select_page_frame(self._upload_custom_frame_path())).pack(pady=10, padx=10, fill="x")
-        ctk.CTkButton(window, text="Keret eltávolítása", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: _select_page_frame(None)).pack(pady=10, padx=10, fill="x")
+        ctk.CTkLabel(main_scroll_frame, text="Beállítások", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
+        
+        slider_panel = ctk.CTkFrame(main_scroll_frame) # A szülő mostantól a main_scroll_frame
+        slider_panel.pack(pady=5, padx=5, fill="both", expand=True)
+
+        ctk.CTkLabel(slider_panel, text="Vastagság (beépített kereteknél)").pack()
+        self.page_frame_thickness_slider = ctk.CTkSlider(slider_panel, from_=0.01, to=0.2, command=self._update_page_frame_properties)
+        self.page_frame_thickness_slider.pack(fill="x", padx=10, pady=(0, 10))
+        
+        ctk.CTkLabel(slider_panel, text="Méret").pack()
+        self.page_frame_scale_slider = ctk.CTkSlider(slider_panel, from_=0.5, to=1.5, command=self._update_page_frame_properties)
+        self.page_frame_scale_slider.pack(fill="x", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(slider_panel, text="Vízszintes eltolás").pack()
+        self.page_frame_offset_x_slider = ctk.CTkSlider(slider_panel, from_=-200, to=200, number_of_steps=400, command=self._update_page_frame_properties)
+        self.page_frame_offset_x_slider.pack(fill="x", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(slider_panel, text="Függőleges eltolás").pack()
+        self.page_frame_offset_y_slider = ctk.CTkSlider(slider_panel, from_=-200, to=200, number_of_steps=400, command=self._update_page_frame_properties)
+        self.page_frame_offset_y_slider.pack(fill="x", padx=10, pady=(0, 10))
+
+        ctk.CTkButton(main_scroll_frame, text="Keret eltávolítása", fg_color="#D32F2F", hover_color="#B71C1C", command=lambda: self._apply_page_frame(None)).pack(pady=10, padx=5, fill="x")
+        
+        self.update_page_frame_editor_ui()
+
+    def _apply_page_frame(self, path):
+        """Alkalmazza a kiválasztott keretet az oldalra és alaphelyzetbe állítja a beállításokat."""
+        current_page_data = self.pages[self.current_page]
+        if path:
+            current_page_data['page_frame_path'] = path
+            # Új keret választásakor alaphelyzetbe állítjuk a csúszkákat
+            current_page_data['page_frame_thickness'] = 0.05
+            current_page_data['page_frame_scale'] = 1.0
+            current_page_data['page_frame_offset_x'] = 0
+            current_page_data['page_frame_offset_y'] = 0
+        else:
+            # Törléskor eltávolítjuk az összes kapcsolódó kulcsot
+            for key in ['page_frame_path', 'page_frame_thickness', 'page_frame_scale', 'page_frame_offset_x', 'page_frame_offset_y']:
+                current_page_data.pop(key, None)
+
+        self.update_page_frame_editor_ui()
+        self.refresh_editor_view()
+
+    def _update_page_frame_properties(self, value=None):
+        """Frissíti az oldalkeretet tulajdonságait a csúszkák alapján."""
+        if not (self.page_frame_editor_window and self.page_frame_editor_window.winfo_exists()):
+            return
+        
+        current_page_data = self.pages[self.current_page]
+        current_page_data['page_frame_thickness'] = self.page_frame_thickness_slider.get()
+        current_page_data['page_frame_scale'] = self.page_frame_scale_slider.get()
+        current_page_data['page_frame_offset_x'] = int(self.page_frame_offset_x_slider.get())
+        current_page_data['page_frame_offset_y'] = int(self.page_frame_offset_y_slider.get())
+        
+        self.refresh_editor_view()
+    
+    def update_page_frame_editor_ui(self):
+        """Frissíti az oldalkeretet szerkesztő ablak vezérlőinek állapotát."""
+        if not (self.page_frame_editor_window and self.page_frame_editor_window.winfo_exists()):
+            return
+
+        current_page_data = self.pages[self.current_page]
+        props = current_page_data
+        
+        sliders = [self.page_frame_scale_slider, self.page_frame_offset_x_slider, self.page_frame_offset_y_slider, self.page_frame_thickness_slider]
+        
+        if props.get('page_frame_path'):
+            for slider in sliders:
+                slider.configure(state="normal")
+            
+            self.page_frame_scale_slider.set(props.get('page_frame_scale', 1.0))
+            self.page_frame_offset_x_slider.set(props.get('page_frame_offset_x', 0))
+            self.page_frame_offset_y_slider.set(props.get('page_frame_offset_y', 0))
+            self.page_frame_thickness_slider.set(props.get('page_frame_thickness', 0.05))
+
+            if not props.get('page_frame_path', '').startswith('preset_'):
+                self.page_frame_thickness_slider.configure(state="disabled")
+        else:
+            for slider in sliders:
+                slider.configure(state="disabled")
+            self.page_frame_scale_slider.set(1.0)
+            self.page_frame_offset_x_slider.set(0)
+            self.page_frame_offset_y_slider.set(0)
+            self.page_frame_thickness_slider.set(0.05)
+
+
+    def _render_page_frame(self):
+        """Kirajzolja az oldalkeretet a vászonra, figyelembe véve a méretezési és eltolási beállításokat."""
+        offset_x, offset_y, draw_w, draw_h = self._get_page_draw_area()
+        if draw_w <= 1 or draw_h <= 1: return
+
+        current_page_data = self.pages[self.current_page]
+        page_frame_path = current_page_data.get('page_frame_path')
+        
+        if self.canvas_page_frame_item:
+            self.canvas.delete(self.canvas_page_frame_item)
+            self.canvas_page_frame_item = None
+            self.page_frame_photo_image = None
+
+        if page_frame_path:
+            frame_img = None
+            if page_frame_path.startswith('preset_'):
+                thickness_ratio = current_page_data.get('page_frame_thickness', 0.05)
+                frame_img = self._create_preset_frame(page_frame_path, (draw_w, draw_h), thickness_ratio)
+            elif os.path.exists(page_frame_path):
+                frame_img = Image.open(page_frame_path).convert("RGBA")
+            
+            if frame_img:
+                # ÚJ RÉSZ: Méretezés és eltolás alkalmazása
+                f_scale = current_page_data.get('page_frame_scale', 1.0)
+                f_off_x = current_page_data.get('page_frame_offset_x', 0)
+                f_off_y = current_page_data.get('page_frame_offset_y', 0)
+
+                # Az új keret méretei a skálázás alapján
+                new_fw = int(draw_w * f_scale)
+                new_fh = int(draw_h * f_scale)
+                
+                # A keret átméretezése
+                resized_frame = frame_img.resize((new_fw, new_fh), Image.LANCZOS)
+                
+                # A beillesztés pozíciójának kiszámítása a középpontból és az eltolásból
+                paste_x = (draw_w - new_fw) // 2 + f_off_x
+                paste_y = (draw_h - new_fh) // 2 + f_off_y
+                
+                # Létrehozunk egy üres, átlátszó réteget, amire a keretet helyezzük,
+                # hogy a vászonra egyetlen képként kerüljön ki.
+                final_frame_layer = Image.new('RGBA', (draw_w, draw_h), (0, 0, 0, 0))
+                final_frame_layer.paste(resized_frame, (paste_x, paste_y), resized_frame)
+                
+                self.page_frame_photo_image = ImageTk.PhotoImage(final_frame_layer)
+                self.canvas_page_frame_item = self.canvas.create_image(
+                    offset_x, offset_y, 
+                    image=self.page_frame_photo_image, 
+                    anchor="nw", 
+                    tags="page_frame"
+                )
     
     def _upload_custom_frame_path(self):
         return filedialog.askopenfilename(title="Válassz egy keret képet", filetypes=[("Képfájlok", "*.jpg *.jpeg *.png *.bmp"), ("Minden fájl", "*.*")]) or None
