@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import messagebox, filedialog, colorchooser, Canvas
 import os
-from PIL import Image, ImageDraw, ImageTk, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageTk, ImageFont, ImageEnhance, ImageFilter
 import traceback
 import json
 import copy # Szükséges a mentéshez
@@ -671,29 +671,31 @@ class FotokonyvGUI:
 
     def _get_page_draw_area(self):
         """Kiszámolja a lap arányainak megfelelő rajzolási területet a vásznon belül."""
-        canvas_w = self.canvas.winfo_width()
-        canvas_h = self.canvas.winfo_height()
+        # ÚJ: Árnyék mérete pixelben
+        shadow_offset = 15 
+
+        canvas_w = self.canvas.winfo_width() - (shadow_offset * 2)
+        canvas_h = self.canvas.winfo_height() - (shadow_offset * 2)
 
         page_data = self.pages[self.current_page]
         page_pixel_w, page_pixel_h = page_data.get('size', self.DEFAULT_BOOK_SIZE_PIXELS)
         
-        if page_pixel_h == 0 or canvas_h == 0:
-            return 0, 0, canvas_w, canvas_h
+        if page_pixel_h == 0 or canvas_h <= 0:
+            return 0, 0, self.canvas.winfo_width(), self.canvas.winfo_height()
 
         page_ratio = page_pixel_w / page_pixel_h
         canvas_ratio = canvas_w / canvas_h
 
         if page_ratio > canvas_ratio:
-            # A vászon szélessége a korlát
             draw_w = canvas_w
             draw_h = canvas_w / page_ratio
         else:
-            # A vászon magassága a korlát
             draw_h = canvas_h
             draw_w = canvas_h * page_ratio
             
-        offset_x = (canvas_w - draw_w) / 2
-        offset_y = (canvas_h - draw_h) / 2
+        # Az eltolást most már az eredeti vászonmérethez és az árnyékhoz is igazítjuk
+        offset_x = (self.canvas.winfo_width() - draw_w) / 2
+        offset_y = (self.canvas.winfo_height() - draw_h) / 2
         
         return int(offset_x), int(offset_y), int(draw_w), int(draw_h)
 
@@ -704,25 +706,53 @@ class FotokonyvGUI:
         page_data = self.pages[self.current_page]
         bg_setting = page_data.get('background')
 
-        # Először töröljük a régit, ha van
         if self.canvas_bg_item:
             self.canvas.delete(self.canvas_bg_item)
             self.canvas_bg_item = None
             self.bg_photo_image = None
 
         try:
+            # --- ÁRNYÉK ÉS HÁTTÉR LÉTREHOZÁSA KÉPKÉNT ---
+            shadow_blur = 15  # Az elmosás mértéke
+            shadow_color = '#282828' # Sötétszürke árnyék
+
+            # 1. Létrehozunk egy nagyobb, átlátszó vásznat az árnyéknak
+            shadow_canvas = Image.new('RGBA', (draw_w + shadow_blur*2, draw_h + shadow_blur*2), (0, 0, 0, 0))
+            shadow_draw = ImageDraw.Draw(shadow_canvas)
+
+            # 2. Rajzolunk egy fekete téglalapot a közepére (ez lesz az elmosott árnyék)
+            shadow_draw.rectangle(
+                (shadow_blur, shadow_blur, draw_w + shadow_blur, draw_h + shadow_blur),
+                fill=shadow_color
+            )
+
+            # 3. Alkalmazzuk az elmosás effektet
+            shadow_canvas = shadow_canvas.filter(ImageFilter.GaussianBlur(radius=shadow_blur / 2))
+
+            # 4. Létrehozzuk a tényleges oldal hátterét
             if isinstance(bg_setting, dict) and bg_setting.get('type') == 'image':
                 img_path = bg_setting.get('path')
-                if not img_path or not os.path.exists(img_path):
-                    raise FileNotFoundError("A háttérkép nem található.")
-                
-                pil_image = Image.open(img_path).convert("RGBA").resize((draw_w, draw_h), Image.LANCZOS)
-                self.bg_photo_image = ImageTk.PhotoImage(pil_image)
-                
-                self.canvas_bg_item = self.canvas.create_image(offset_x, offset_y, image=self.bg_photo_image, anchor="nw", tags="background")
+                if img_path and os.path.exists(img_path):
+                    page_bg_img = Image.open(img_path).convert("RGBA").resize((draw_w, draw_h), Image.LANCZOS)
+                else: # Ha a kép nem található, fehér lesz
+                    page_bg_img = Image.new('RGBA', (draw_w, draw_h), 'white')
             else:
                 bg_color = bg_setting if isinstance(bg_setting, str) and bg_setting.startswith('#') else self.colors['card_bg']
-                self.canvas_bg_item = self.canvas.create_rectangle(offset_x, offset_y, offset_x + draw_w, offset_y + draw_h, fill=bg_color, outline="")
+                page_bg_img = Image.new('RGBA', (draw_w, draw_h), bg_color)
+
+            # 5. A kész oldal hátterét ráillesztjük az árnyék közepére
+            shadow_canvas.paste(page_bg_img, (shadow_blur, shadow_blur))
+
+            # 6. A végső, árnyékkal ellátott képet jelenítjük meg
+            self.bg_photo_image = ImageTk.PhotoImage(shadow_canvas)
+            self.canvas_bg_item = self.canvas.create_image(
+                offset_x - shadow_blur,  # Az eltolást korrigáljuk az árnyék méretével
+                offset_y - shadow_blur, 
+                image=self.bg_photo_image, 
+                anchor="nw", 
+                tags="background"
+            )
+
         except Exception as e:
             print(f"HIBA a háttér renderelésekor: {e}")
             traceback.print_exc()
