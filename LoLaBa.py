@@ -1903,22 +1903,33 @@ class FotokonyvGUI:
 
     # --- MOZGATÁS METÓDUSAI ---
     def _on_widget_press(self, event, item_type, index):
+        widget_to_drag = None
         if item_type == 'photo':
             if index < len(self.photo_frames):
                 self._select_photo(index)
-                widget = self.photo_frames[index]
+                widget_to_drag = self.photo_frames[index]
             else: return
         elif item_type == 'text':
             if index < len(self.text_widgets):
                 self._select_text(index)
-                widget = self.text_widgets[index]
+                widget_to_drag = self.text_widgets[index]
             else: return
         else: return
         
-        canvas_item_id = self.widget_to_canvas_item.get(widget)
+        canvas_item_id = self.widget_to_canvas_item.get(widget_to_drag)
         if canvas_item_id:
             self.canvas.tag_raise(canvas_item_id)
-            self._drag_data = {"widget": widget, "item_id": canvas_item_id, "item_type": item_type, "index": index, "offset_x": event.x_root, "offset_y": event.y_root}
+            # Elmentjük a kezdő pozíciót is
+            x, y = self.canvas.coords(canvas_item_id)
+            self._drag_data = {
+                "widget": widget_to_drag, 
+                "item_id": canvas_item_id, 
+                "item_type": item_type, 
+                "index": index, 
+                "offset_x": event.x_root, 
+                "offset_y": event.y_root,
+                "start_pos": (x, y) # ÚJ: Kezdő pozíció elmentése
+            }
 
     def _on_widget_drag(self, event):
         if not self._drag_data: return
@@ -1936,34 +1947,64 @@ class FotokonyvGUI:
     def _on_widget_release(self, event):
         if not self._drag_data: return
         
-        item_type = self._drag_data["item_type"]
-        index = self._drag_data["index"]
-        item_id = self._drag_data["item_id"]
+        dragged_index = self._drag_data["index"]
+        dragged_type = self._drag_data["item_type"]
+        dragged_id = self._drag_data["item_id"]
         
+        # Csak fotók cseréjét kezeljük
+        if dragged_type == 'photo':
+            # Megkeressük az elemet az egér kurzor alatt
+            x, y = event.x_root - self.canvas.winfo_rootx(), event.y_root - self.canvas.winfo_rooty()
+            overlapping_items = self.canvas.find_overlapping(x, y, x, y)
+            
+            target_index = None
+            for item_id in overlapping_items:
+                # Keressük azt a widgetet, amihez az item_id tartozik
+                for i, frame in enumerate(self.photo_frames):
+                    if frame and self.widget_to_canvas_item.get(frame) == item_id:
+                        if i != dragged_index: # Nem a saját magára dobta
+                            target_index = i
+                            break
+                if target_index is not None:
+                    break
+
+            # --- KÉPCSERE LOGIKA ---
+            if target_index is not None:
+                # Megcseréljük a képek útvonalait és a tulajdonságokat
+                photos = self.pages[self.current_page]['photos']
+                photos[dragged_index]['path'], photos[target_index]['path'] = \
+                    photos[target_index]['path'], photos[dragged_index]['path']
+
+                # Tulajdonságok cseréje
+                dragged_key = str((self.current_page, dragged_index))
+                target_key = str((self.current_page, target_index))
+                
+                dragged_props = self.photo_properties.pop(dragged_key, {})
+                target_props = self.photo_properties.pop(target_key, {})
+
+                self.photo_properties[dragged_key] = target_props
+                self.photo_properties[target_key] = dragged_props
+                
+                self.refresh_editor_view()
+                self._drag_data = {}
+                return # Befejeztük a cserét
+
+        # --- EREDETI MOZGATÁS LOGIKA (ha nem történt csere) ---
         offset_x, offset_y, draw_w, draw_h = self._get_page_draw_area()
         if draw_w == 0 or draw_h == 0: 
             self._drag_data = {}
             return
             
-        x, y = self.canvas.coords(item_id)
+        x, y = self.canvas.coords(dragged_id)
 
-        # Az új relatív pozíciót a rajzolási területhez képest számoljuk
-        rel_x = (x - offset_x) / draw_w
-        rel_y = (y - offset_y) / draw_h
-
-        # Biztosítjuk, hogy a koordináták a lapon belül maradjanak
-        rel_x = max(0.0, min(1.0, rel_x))
-        rel_y = max(0.0, min(1.0, rel_y))
-
-        if item_type == 'photo':
+        if dragged_type == 'photo':
             data_list = self.pages[self.current_page]['photos']
-            data_list[index]['relx'] = rel_x
-            data_list[index]['rely'] = rel_y
-        elif item_type == 'text':
+            data_list[dragged_index]['relx'] = (x - offset_x) / draw_w
+            data_list[dragged_index]['rely'] = (y - offset_y) / draw_h
+        elif dragged_type == 'text':
             data_list = self.pages[self.current_page]['texts']
-            # Szövegnél a középpontot tároljuk, ezért nem kell korlátozni
-            data_list[index]['relx'] = (x - offset_x) / draw_w
-            data_list[index]['rely'] = (y - offset_y) / draw_h
+            data_list[dragged_index]['relx'] = (x - offset_x) / draw_w
+            data_list[dragged_index]['rely'] = (y - offset_y) / draw_h
             
         self._drag_data = {}
     
