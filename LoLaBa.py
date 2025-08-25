@@ -1679,18 +1679,37 @@ class FotokonyvGUI:
                 draw.rectangle([frame_x, frame_y, frame_x + frame_w, frame_y + frame_h], outline="red", width=5)
                 draw.text((frame_x + 10, frame_y + 10), "Kép hiba", fill="red")
         
+        # --- JAVÍTOTT RÉSZ KEZDETE ---
         page_frame_path = page_data.get('page_frame_path')
         if page_frame_path:
-            thickness_ratio = page_data.get('page_frame_thickness', 0.05)
             frame_img = None
-            if page_frame_path.startswith('preset_'): 
+            if page_frame_path.startswith('preset_'):
+                thickness_ratio = page_data.get('page_frame_thickness', 0.05)
                 frame_img = self._create_preset_frame(page_frame_path, (W, H), thickness_ratio)
-            elif os.path.exists(page_frame_path): 
+            elif os.path.exists(page_frame_path):
                 frame_img = Image.open(page_frame_path).convert("RGBA")
             
             if frame_img:
-                frame_img_resized = frame_img.resize((W, H), Image.LANCZOS)
-                page_image.paste(frame_img_resized, (0, 0), frame_img_resized)
+                # Beolvassuk a méretezési és eltolási adatokat
+                f_scale = page_data.get('page_frame_scale', 1.0)
+                f_off_x = page_data.get('page_frame_offset_x', 0)
+                f_off_y = page_data.get('page_frame_offset_y', 0)
+
+                # Kiszámoljuk az új keretméreteket
+                new_fw = int(W * f_scale)
+                new_fh = int(H * f_scale)
+
+                if new_fw > 0 and new_fh > 0:
+                    # Átméretezzük a keretet
+                    resized_frame = frame_img.resize((new_fw, new_fh), Image.LANCZOS)
+                    
+                    # Kiszámoljuk a beillesztés pozícióját
+                    paste_x = (W - new_fw) // 2 + f_off_x
+                    paste_y = (H - new_fh) // 2 + f_off_y
+                    
+                    # Rápasztjuk a keretet a már meglévő oldal képére
+                    page_image.paste(resized_frame, (paste_x, paste_y), resized_frame)
+        # --- JAVÍTOTT RÉSZ VÉGE ---
                 
         for text_data in page_data.get('texts', []):
             try:
