@@ -55,6 +55,7 @@ class FotokonyvGUI:
         self.main_editor_frame = None
         self.left_panel_scroll = None
         self.title_label = None
+        self.original_bg_pil_image = None
         
         self.canvas = None
         self.canvas_bg_item = None
@@ -100,6 +101,34 @@ class FotokonyvGUI:
         self.text_editor_window = None
 
 
+
+    # EZT A TELJES FÜGGVÉNYT MÁSOLD BE AZ OSZTÁLYBA:
+
+    def _resize_main_menu_bg(self, event):
+        """Az ablak átméretezésekor frissíti a főmenü háttérképét, hogy arányosan kitöltse a teret."""
+        # Ha a kép betöltése sikertelen volt, ne csináljon semmit
+        if not hasattr(self, 'original_bg_pil_image') or not self.original_bg_pil_image:
+            return
+
+        # Kérjük le a keret új méretét az eseményből
+        new_width = event.width
+        new_height = event.height
+    
+        # Elkerüljük a hibát, ha az ablak 0 méretűre van kicsinyítve
+        if new_width <= 0 or new_height <= 0:
+            return
+
+        try:
+            # Méretezzük át az eredeti PIL képet az új méretre
+            resized_pil_image = self.original_bg_pil_image.resize((new_width, new_height), Image.LANCZOS)
+
+            # Hozzunk létre egy új CTkImage objektumot a frissített méretekkel
+            self.main_menu_bg_image = ctk.CTkImage(resized_pil_image, size=(new_width, new_height))
+        
+            # Frissítsük a címkét az új képpel
+            self.bg_label.configure(image=self.main_menu_bg_image)
+        except Exception as e:
+            print(f"Hiba a háttérkép átméretezésekor: {e}")
 
     def _set_cursor_recursive(self, widget, cursor_style):
         """Rekurzívan beállítja a kurzort egy widgeten és annak összes gyerek-widgetjén."""
@@ -266,12 +295,23 @@ class FotokonyvGUI:
         main_frame = ctk.CTkFrame(self.root, fg_color=self.colors['bg_primary'], corner_radius=0)
         main_frame.pack(fill="both", expand=True)
 
+        
+        
         try:
             bg_image_path = os.path.join(self.assets_path, "backgrounds", "main_menu_bg.png")
-            self.main_menu_bg_image = ctk.CTkImage(Image.open(bg_image_path), size=(1200, 800))
-            bg_label = ctk.CTkLabel(main_frame, image=self.main_menu_bg_image, text="")
-            bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
+            # 1. Töltsük be az eredeti, nagy felbontású képet és mentsük el
+            self.original_bg_pil_image = Image.open(bg_image_path)
+
+            # 2. Hozzuk létre a címkét, amiben a kép lesz, de még kép nélkül
+            self.bg_label = ctk.CTkLabel(main_frame, text="")
+            self.bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+            # 3. Kössük hozzá az átméretezést figyelő eseményt a kerethez
+            main_frame.bind("<Configure>", self._resize_main_menu_bg)
+
         except Exception as e:
+            # Hiba esetén is hozzuk létre a változót, hogy ne legyen később gond
+            self.original_bg_pil_image = None
             print(f"Főmenü háttérképét nem sikerült betölteni: {e}")
 
         ctk.CTkLabel(main_frame, text="LoLaBa Fotókönyv", font=ctk.CTkFont(size=48, weight="bold"), text_color="white", fg_color="transparent").pack(pady=(80, 20))
