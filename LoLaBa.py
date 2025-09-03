@@ -102,7 +102,7 @@ class FotokonyvGUI:
 
 
 
-    # EZT A TELJES FÜGGVÉNYT MÁSOLD BE AZ OSZTÁLYBA:
+  
 
     def _resize_main_menu_bg(self, event):
         """Az ablak átméretezésekor frissíti a főmenü háttérképét, hogy arányosan kitöltse a teret."""
@@ -191,7 +191,7 @@ class FotokonyvGUI:
                 else:
                     self.grayscale_checkbox.deselect()
 
-                # MÓDOSÍTVA: Az alapértelmezett a 'fill' (Kitöltés)
+                
                 fit_mode = props.get('fit_mode', 'fill') 
                 self.fit_mode_button.set("Beleillesztés" if fit_mode == 'fit' else "Kitöltés")
 
@@ -992,9 +992,16 @@ class FotokonyvGUI:
             self.refresh_editor_view()
     
     def set_background(self):
+        """Felugró ablakot nyit a háttér beállításához, ami már görgethető, ha a tartalom túl nagy."""
         color_picker = ctk.CTkToplevel(self.root)
-        color_picker.title("Háttér beállítása"); color_picker.geometry("400x500")
-        color_picker.transient(self.root); color_picker.grab_set()
+        color_picker.title("Háttér beállítása")
+        color_picker.geometry("400x500")
+        color_picker.transient(self.root)
+        color_picker.grab_set()
+
+        # Létrehozunk egy fő görgethető keretet, amibe minden más elem kerül.
+        main_scroll_frame = ctk.CTkScrollableFrame(color_picker)
+        main_scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         def _apply_background(setting):
             self.pages[self.current_page]['background'] = setting
@@ -1002,12 +1009,16 @@ class FotokonyvGUI:
             self.refresh_editor_view()
 
         def _upload_background_image():
-            filename = filedialog.askopenfilename(title="Válassz háttérképet", filetypes=[("Képfájlok", "*.jpg *.jpeg *.png"), ("Minden fájl", "*.*")])
+            filename = filedialog.askopenfilename(
+                title="Válassz háttérképet",
+                filetypes=[("Képfájlok", "*.jpg *.jpeg *.png"), ("Minden fájl", "*.*")]
+            )
             if filename:
                 _apply_background({'type': 'image', 'path': filename})
-        
-        ctk.CTkLabel(color_picker, text="Beépített hátterek", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 5))
-        preset_bg_frame = ctk.CTkFrame(color_picker, fg_color="transparent")
+
+        # Az elemek szülője mostantól a 'main_scroll_frame'
+        ctk.CTkLabel(main_scroll_frame, text="Beépített hátterek", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 5))
+        preset_bg_frame = ctk.CTkFrame(main_scroll_frame, fg_color="transparent")
         preset_bg_frame.pack(pady=5, padx=10)
         
         backgrounds_path = os.path.join(self.assets_path, "backgrounds")
@@ -1023,21 +1034,24 @@ class FotokonyvGUI:
                 except Exception as e:
                     print(f"Hiba a beépített háttér betöltésekor ({fname}): {e}")
 
-        ctk.CTkLabel(color_picker, text="Színek", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 5))
-        palette_frame = ctk.CTkFrame(color_picker, fg_color="transparent"); palette_frame.pack(pady=5, padx=10)
+        ctk.CTkLabel(main_scroll_frame, text="Színek", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(15, 5))
+        palette_frame = ctk.CTkFrame(main_scroll_frame, fg_color="transparent")
+        palette_frame.pack(pady=5, padx=10)
         colors_list = ['#FFFFFF', '#F0F0F0', '#D3E3F1', '#D1F0D1', '#F5E6D3', '#E6D3F5', '#FFDDC1', '#FFD1D1']
         for i, color in enumerate(colors_list):
             ctk.CTkButton(palette_frame, text="", fg_color=color, width=40, height=40, corner_radius=8, command=lambda c=color: _apply_background(c)).grid(row=i // 4, column=i % 4, padx=10, pady=10)
         
-        ctk.CTkLabel(color_picker, text="Vagy adj meg egyéni színt:", font=ctk.CTkFont(size=14)).pack(pady=(10, 5))
-        custom_color_frame = ctk.CTkFrame(color_picker, fg_color="transparent"); custom_color_frame.pack(pady=5, padx=20, fill="x")
-        custom_color_entry = ctk.CTkEntry(custom_color_frame, placeholder_text="#RRGGBB"); custom_color_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        ctk.CTkLabel(main_scroll_frame, text="Vagy adj meg egyéni színt:", font=ctk.CTkFont(size=14)).pack(pady=(10, 5))
+        custom_color_frame = ctk.CTkFrame(main_scroll_frame, fg_color="transparent")
+        custom_color_frame.pack(pady=5, padx=20, fill="x")
+        custom_color_entry = ctk.CTkEntry(custom_color_frame, placeholder_text="#RRGGBB")
+        custom_color_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
         ctk.CTkButton(custom_color_frame, text="Alkalmaz", width=80, command=lambda: _apply_background(custom_color_entry.get())).pack(side="left")
 
-        ctk.CTkLabel(color_picker, text="Vagy tölts fel saját képet:", font=ctk.CTkFont(size=14)).pack(pady=(15, 5))
-        ctk.CTkButton(color_picker, text="🖼️ Háttérkép feltöltése...", command=_upload_background_image).pack(pady=5, padx=20, fill="x")
+        ctk.CTkLabel(main_scroll_frame, text="Vagy tölts fel saját képet:", font=ctk.CTkFont(size=14)).pack(pady=(15, 5))
+        ctk.CTkButton(main_scroll_frame, text="🖼️ Háttérkép feltöltése...", command=_upload_background_image).pack(pady=5, padx=20, fill="x")
         
-        ctk.CTkButton(color_picker, text="Háttér eltávolítása", command=lambda: _apply_background(None)).pack(pady=15, padx=20, fill="x")
+        ctk.CTkButton(main_scroll_frame, text="Háttér eltávolítása", command=lambda: _apply_background(None)).pack(pady=15, padx=20, fill="x")
 
     def _render_page_frame(self):
         offset_x, offset_y, draw_w, draw_h = self._get_page_draw_area()
@@ -1495,7 +1509,6 @@ class FotokonyvGUI:
             self.frame_thickness_slider.set(0.05)
             
     # --- KÉPKERET ÉS OLDALKERET METÓDUSOK ---
-# (Helyezd ezeket a függvényeket a többi kerettel kapcsolatos metódus mellé)
 
     def add_page_frame(self):
         """Felugró ablakot nyit az oldalkeretet beállításához, méretezési és eltolási opciókkal."""
@@ -2756,7 +2769,7 @@ class FotokonyvGUI:
                         # Minden további oldalhoz újat adunk hozzá
                         self.add_new_page()
 
-                    # --- ÚJ RÉSZ: SZÖVEGDOBOZ HOZZÁADÁSA ---
+                   
                     # Csak a mappa első oldalára tesszük ki a címet
                     if i == 0:
                         # Esztétikusabbá tesszük a mappa nevét (pl. "balatoni_kepek" -> "Balatoni kepek")
@@ -2773,7 +2786,7 @@ class FotokonyvGUI:
                             "show_bg_on_select": False
                         }
                         self.pages[self.current_page]['texts'].append(title_text_data)
-                    # --- ÚJ RÉSZ VÉGE ---
+                    
 
                     if self.wizard_mode == 'color':
                         self.pages[self.current_page]['background'] = random.choice(self.wizard_color_theme['palette'])
