@@ -385,35 +385,64 @@ class FotokonyvGUI:
             text_label.bind("<Button-1>", lambda e, cmd=command: cmd())
 
     def create_layout_preview(self, parent, layout_count, click_handler=None):
-        preview_frame = ctk.CTkFrame(parent, width=180, height=100, fg_color=self.colors['accent'], corner_radius=15)
-        preview_frame.pack(pady=(20, 10)); preview_frame.pack_propagate(False)
-        if click_handler: preview_frame.bind("<Button-1>", click_handler)
-        
-        if layout_count == 1:
-            box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box.place(relx=0.5, rely=0.5, relwidth=0.8, relheight=0.8, anchor="center")
-        elif layout_count == 2:
-            box1 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box1.place(relx=0.25, rely=0.5, relwidth=0.4, relheight=0.8, anchor="center")
-            box2 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box2.place(relx=0.75, rely=0.5, relwidth=0.4, relheight=0.8, anchor="center")
-        elif layout_count == 4:
-            box1 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box1.place(relx=0.25, rely=0.25, relwidth=0.4, relheight=0.4, anchor="center")
-            box2 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box2.place(relx=0.75, rely=0.25, relwidth=0.4, relheight=0.4, anchor="center")
-            box3 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box3.place(relx=0.25, rely=0.75, relwidth=0.4, relheight=0.4, anchor="center")
-            box4 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box4.place(relx=0.75, rely=0.75, relwidth=0.4, relheight=0.4, anchor="center")
-        else:
-            cols = max(1, int(math.ceil(math.sqrt(layout_count))))
-            rows = max(1, int(math.ceil(layout_count / cols)))
-            
-            total_padding_x, total_padding_y = 0.2, 0.2
-            rel_w, rel_h = (1.0 - total_padding_x) / cols, (1.0 - total_padding_y) / rows
-            spacing_x, spacing_y = rel_w * 0.15, rel_h * 0.15
-            cell_w, cell_h = rel_w - spacing_x, rel_h - spacing_y
+        """
+        Létrehoz egy előnézeti keretet a megadott számú elrendezéshez,
+        VIZUÁLISAN egyenletes, pixel-alapú margókkal és közökkel.
+        """
+        preview_frame = ctk.CTkFrame(parent, width=180, height=100, fg_color=self.colors['accent'], corner_radius=10)
+        preview_frame.pack(pady=(20, 10))
+        preview_frame.pack_propagate(False)
+        if click_handler:
+            preview_frame.bind("<Button-1>", click_handler)
 
-            for i in range(layout_count):
-                c, r = i % cols, i // cols
-                rel_x = (total_padding_x / 2) + c * rel_w + (spacing_x / 2)
-                rel_y = (total_padding_y / 2) + r * rel_h + (spacing_y / 2)
-                box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=2)
-                box.place(relx=rel_x, rely=rel_y, relwidth=cell_w, relheight=cell_h)
+        if layout_count == 0:
+            return
+
+        # --- ÚJ LOGIKA: Pixel-alapú számítás a vizuális szimmetriáért ---
+
+        # 1. A keret fix méretei és a kívánt margó pixelben
+        frame_w_px = 180
+        frame_h_px = 100
+        padding_px = 8 # Ezt a pixel értéket használjuk mindenhol (margóként és közként is)
+
+        # 2. Rács méretének meghatározása
+        cols = max(1, int(math.ceil(math.sqrt(layout_count))))
+        rows = max(1, int(math.ceil(layout_count / cols)))
+        
+        # Biztonsági ellenőrzés: ha a padding túl sok helyet foglalna, csökkentjük
+        if padding_px * (cols + 1) >= frame_w_px or padding_px * (rows + 1) >= frame_h_px:
+            padding_px = 4
+
+        # 3. Dobozok méretének kiszámítása PIXELBEN
+        total_padding_w_px = padding_px * (cols + 1)
+        total_padding_h_px = padding_px * (rows + 1)
+
+        box_w_px = (frame_w_px - total_padding_w_px) / cols
+        box_h_px = (frame_h_px - total_padding_h_px) / rows
+        
+        # Ha a számítás negatív méretet adna, ne rajzoljunk semmit
+        if box_w_px <= 0 or box_h_px <= 0:
+            return
+
+        # 4. Dobozok elhelyezése a pixel értékekből számolt relatív pozíciókkal
+        for i in range(layout_count):
+            c = i % cols
+            r = i // cols
+
+            # Doboz pozíciója pixelben a bal felső saroktól
+            x_px = padding_px + c * (box_w_px + padding_px)
+            y_px = padding_px + r * (box_h_px + padding_px)
+
+            # Átváltás relatív értékekre a .place() metódushoz
+            rel_x = x_px / frame_w_px
+            rel_y = y_px / frame_h_px
+            rel_w = box_w_px / frame_w_px
+            rel_h = box_h_px / frame_h_px
+
+            box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=3, border_width=0)
+            box.place(relx=rel_x, rely=rel_y, relwidth=rel_w, relheight=rel_h)
+            if click_handler:
+                box.bind("<Button-1>", click_handler)
 
     def show_page_selection(self, is_new_project=False):
         if is_new_project: self._reset_project_state()
