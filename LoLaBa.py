@@ -385,64 +385,35 @@ class FotokonyvGUI:
             text_label.bind("<Button-1>", lambda e, cmd=command: cmd())
 
     def create_layout_preview(self, parent, layout_count, click_handler=None):
-        """
-        Létrehoz egy előnézeti keretet a megadott számú elrendezéshez,
-        VIZUÁLISAN egyenletes, pixel-alapú margókkal és közökkel.
-        """
-        preview_frame = ctk.CTkFrame(parent, width=180, height=100, fg_color=self.colors['accent'], corner_radius=10)
-        preview_frame.pack(pady=(20, 10))
-        preview_frame.pack_propagate(False)
-        if click_handler:
-            preview_frame.bind("<Button-1>", click_handler)
-
-        if layout_count == 0:
-            return
-
-        # --- ÚJ LOGIKA: Pixel-alapú számítás a vizuális szimmetriáért ---
-
-        # 1. A keret fix méretei és a kívánt margó pixelben
-        frame_w_px = 180
-        frame_h_px = 100
-        padding_px = 8 # Ezt a pixel értéket használjuk mindenhol (margóként és közként is)
-
-        # 2. Rács méretének meghatározása
-        cols = max(1, int(math.ceil(math.sqrt(layout_count))))
-        rows = max(1, int(math.ceil(layout_count / cols)))
+        preview_frame = ctk.CTkFrame(parent, width=180, height=100, fg_color=self.colors['accent'], corner_radius=15)
+        preview_frame.pack(pady=(20, 10)); preview_frame.pack_propagate(False)
+        if click_handler: preview_frame.bind("<Button-1>", click_handler)
         
-        # Biztonsági ellenőrzés: ha a padding túl sok helyet foglalna, csökkentjük
-        if padding_px * (cols + 1) >= frame_w_px or padding_px * (rows + 1) >= frame_h_px:
-            padding_px = 4
+        if layout_count == 1:
+            box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box.place(relx=0.5, rely=0.5, relwidth=0.8, relheight=0.8, anchor="center")
+        elif layout_count == 2:
+            box1 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box1.place(relx=0.25, rely=0.5, relwidth=0.4, relheight=0.8, anchor="center")
+            box2 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box2.place(relx=0.75, rely=0.5, relwidth=0.4, relheight=0.8, anchor="center")
+        elif layout_count == 4:
+            box1 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box1.place(relx=0.25, rely=0.25, relwidth=0.4, relheight=0.4, anchor="center")
+            box2 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box2.place(relx=0.75, rely=0.25, relwidth=0.4, relheight=0.4, anchor="center")
+            box3 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box3.place(relx=0.25, rely=0.75, relwidth=0.4, relheight=0.4, anchor="center")
+            box4 = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=6); box4.place(relx=0.75, rely=0.75, relwidth=0.4, relheight=0.4, anchor="center")
+        else:
+            cols = max(1, int(math.ceil(math.sqrt(layout_count))))
+            rows = max(1, int(math.ceil(layout_count / cols)))
+            
+            total_padding_x, total_padding_y = 0.2, 0.2
+            rel_w, rel_h = (1.0 - total_padding_x) / cols, (1.0 - total_padding_y) / rows
+            spacing_x, spacing_y = rel_w * 0.15, rel_h * 0.15
+            cell_w, cell_h = rel_w - spacing_x, rel_h - spacing_y
 
-        # 3. Dobozok méretének kiszámítása PIXELBEN
-        total_padding_w_px = padding_px * (cols + 1)
-        total_padding_h_px = padding_px * (rows + 1)
-
-        box_w_px = (frame_w_px - total_padding_w_px) / cols
-        box_h_px = (frame_h_px - total_padding_h_px) / rows
-        
-        # Ha a számítás negatív méretet adna, ne rajzoljunk semmit
-        if box_w_px <= 0 or box_h_px <= 0:
-            return
-
-        # 4. Dobozok elhelyezése a pixel értékekből számolt relatív pozíciókkal
-        for i in range(layout_count):
-            c = i % cols
-            r = i // cols
-
-            # Doboz pozíciója pixelben a bal felső saroktól
-            x_px = padding_px + c * (box_w_px + padding_px)
-            y_px = padding_px + r * (box_h_px + padding_px)
-
-            # Átváltás relatív értékekre a .place() metódushoz
-            rel_x = x_px / frame_w_px
-            rel_y = y_px / frame_h_px
-            rel_w = box_w_px / frame_w_px
-            rel_h = box_h_px / frame_h_px
-
-            box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=3, border_width=0)
-            box.place(relx=rel_x, rely=rel_y, relwidth=rel_w, relheight=rel_h)
-            if click_handler:
-                box.bind("<Button-1>", click_handler)
+            for i in range(layout_count):
+                c, r = i % cols, i // cols
+                rel_x = (total_padding_x / 2) + c * rel_w + (spacing_x / 2)
+                rel_y = (total_padding_y / 2) + r * rel_h + (spacing_y / 2)
+                box = ctk.CTkFrame(preview_frame, fg_color=self.colors['green_box'], corner_radius=2)
+                box.place(relx=rel_x, rely=rel_y, relwidth=cell_w, relheight=cell_h)
 
     def show_page_selection(self, is_new_project=False):
         if is_new_project: self._reset_project_state()
@@ -2018,8 +1989,6 @@ class FotokonyvGUI:
 
     
     
-    
-
     def _render_page_to_image(self, page_index):
         if page_index >= len(self.pages): return None
 
@@ -2054,10 +2023,12 @@ class FotokonyvGUI:
                 props = self.photo_properties.get(key, {})
                 fit_mode = props.get('fit_mode', 'fill')
 
+                # Az eredeti, elrendezésből származó méretek használata
                 master_rel_w = photo_data.get('layout_relwidth', photo_data['relwidth'])
                 master_rel_h = photo_data.get('layout_relheight', photo_data['relheight'])
                 frame_w, frame_h = int(master_rel_w * W), int(master_rel_h * H)
 
+                # Ha 'fit' módban van, exportáláskor is átméretezzük a keretet
                 if fit_mode == 'fit':
                     with Image.open(photo_path) as temp_img:
                         img_ratio = temp_img.width / temp_img.height
@@ -2066,8 +2037,8 @@ class FotokonyvGUI:
                         else: frame_w = int(frame_h * img_ratio)
 
                 frame_x, frame_y = int(photo_data['relx'] * W), int(photo_data['rely'] * H)
-                if frame_w <= 0 or frame_h <= 0: continue
 
+                # Kép feldolgozása (ugyanaz a logika, mint a megjelenítésnél)
                 original_img = Image.open(photo_path).convert("RGBA")
                 if props.get('grayscale', False): original_img = original_img.convert('L').convert('RGBA')
                 enhancer = ImageEnhance.Brightness(original_img); original_img = enhancer.enhance(props.get('brightness', 1.0))
@@ -2097,33 +2068,19 @@ class FotokonyvGUI:
                     paste_y = (frame_h - new_h) // 2 - int(extra_h * (pan_y - 0.5))
                     final_photo.paste(resized_img, (paste_x, paste_y), resized_img)
 
+                # ... (a keret és a beillesztés logika változatlan) ...
                 photo_frame_path = props.get('frame_path')
                 if photo_frame_path:
                     thickness_ratio_photo = props.get('frame_thickness', 0.05)
                     photo_frame_img = None
                     if photo_frame_path.startswith('preset_'): photo_frame_img = self._create_preset_frame(photo_frame_path, (frame_w, frame_h), thickness_ratio_photo)
                     elif os.path.exists(photo_frame_path): photo_frame_img = Image.open(photo_frame_path).convert("RGBA")
-                    
                     if photo_frame_img:
-                        # ### JAVÍTÁS (Képkeret): ###
-                        # A torzítás elkerülése érdekében a keretet először a célméretre
-                        # méretezzük, és csak utána alkalmazzuk a felhasználói skálázást.
-                        base_resized_frame = photo_frame_img.resize((frame_w, frame_h), Image.LANCZOS)
-
-                        f_scale = props.get('frame_scale', 1.0)
-                        f_off_x = props.get('frame_offset_x', 0)
-                        f_off_y = props.get('frame_offset_y', 0)
-                        
-                        scaled_fw = int(frame_w * f_scale)
-                        scaled_fh = int(frame_h * f_scale)
-                        
-                        final_frame_img = base_resized_frame
-                        if (scaled_fw, scaled_fh) != (frame_w, frame_h) and scaled_fw > 0 and scaled_fh > 0:
-                             final_frame_img = base_resized_frame.resize((scaled_fw, scaled_fh), Image.LANCZOS)
-
-                        paste_x = (frame_w - scaled_fw) // 2 + f_off_x
-                        paste_y = (frame_h - scaled_fh) // 2 + f_off_y
-                        final_photo.paste(final_frame_img, (paste_x, paste_y), final_frame_img)
+                        f_scale = props.get('frame_scale', 1.0); f_off_x = props.get('frame_offset_x', 0); f_off_y = props.get('frame_offset_y', 0)
+                        new_fw, new_fh = int(frame_w * f_scale), int(frame_h * f_scale)
+                        resized_frame = photo_frame_img.resize((new_fw, new_fh), Image.LANCZOS)
+                        paste_x, paste_y = (frame_w - new_fw) // 2 + f_off_x, (frame_h - new_fh) // 2 + f_off_y
+                        final_photo.paste(resized_frame, (paste_x, paste_y), resized_frame)
                 
                 page_image.paste(final_photo, (frame_x, frame_y), final_photo)
 
@@ -2132,6 +2089,7 @@ class FotokonyvGUI:
                 draw.rectangle([frame_x, frame_y, frame_x + frame_w, frame_y + frame_h], outline="red", width=5)
                 draw.text((frame_x + 10, frame_y + 10), "Kép hiba", fill="red")
         
+        # ... (az oldalkeretet és szöveget renderelő részek változatlanok) ...
         page_frame_path = page_data.get('page_frame_path')
         if page_frame_path:
             frame_img = None
@@ -2151,7 +2109,7 @@ class FotokonyvGUI:
                     paste_x = (W - new_fw) // 2 + f_off_x
                     paste_y = (H - new_fh) // 2 + f_off_y
                     page_image.paste(resized_frame, (paste_x, paste_y), resized_frame)
-                        
+                    
         for text_data in page_data.get('texts', []):
             try:
                 font_family = text_data.get('font_family', 'Arial')
@@ -2181,9 +2139,7 @@ class FotokonyvGUI:
                 
                 if font is None:
                     print(f"Figyelmeztetés: '{font_family}' betűtípus nem található, alapértelmezett betűtípus lesz használva.")
-                    # A load_default nem fogadja el a size argumentumot, de a default font kicsi
-                    font = ImageFont.load_default()
-
+                    font = ImageFont.load_default(size=scaled_font_size)
 
                 text_x, text_y = int(text_data['relx'] * W), int(text_data['rely'] * H)
                 draw.text((text_x, text_y), text_data['text'], fill=font_color, font=font, anchor="mm")
@@ -2192,14 +2148,7 @@ class FotokonyvGUI:
                 print(f"HIBA a szöveg renderelésekor: {e}")
                 traceback.print_exc()
 
-        # ### JAVÍTÁS (Oldalkeretet): ###
-        # Ahelyett, hogy a végén RGB-re konvertálnánk (ami eldobja az átlátszóságot),
-        # egy fehér alapra másoljuk rá az RGBA (átlátszó) rétegeket tartalmazó képet.
-        # Így az átlátszó részek helyesen jelennek meg a fehér háttéren.
-        final_output_image = Image.new("RGB", (W, H), "white")
-        final_output_image.paste(page_image, (0, 0), page_image)
-        return final_output_image
-
+        return page_image.convert("RGB")
     # --- SZÖVEGSZERKESZTŐ METÓDUSOK ---
     def add_text(self):
         if self.text_editor_window is not None and self.text_editor_window.winfo_exists():
