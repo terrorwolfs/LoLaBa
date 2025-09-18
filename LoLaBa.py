@@ -1168,89 +1168,101 @@ class FotokonyvGUI:
             props = self.photo_properties.get(key, {})
             parent_frame.update_idletasks()
 
-            # --- ÚJ LOGIKA A KERET MÉRETÉNEK DINAMIKUS BEÁLLÍTÁSÁHOZ ---
             fit_mode = props.get('fit_mode', 'fill')
             _, _, draw_w, draw_h = self._get_page_draw_area()
 
-            # Először az elrendezésben definiált "mester" méretet használjuk
             master_rel_w = photo_data.get('layout_relwidth', photo_data['relwidth'])
             master_rel_h = photo_data.get('layout_relheight', photo_data['relheight'])
             
             frame_w = int(master_rel_w * draw_w)
             frame_h = int(master_rel_h * draw_h)
 
-            original_img = Image.open(photo_path) # Csak az arányok miatt kell betölteni
-
-            # Ha "Beleillesztés" módban vagyunk, a keret méretét a kép arányaihoz igazítjuk
-            if fit_mode == 'fit':
-                img_ratio = original_img.width / original_img.height
-                frame_ratio = frame_w / frame_h if frame_h > 0 else 1
-                
-                if img_ratio > frame_ratio: # A kép szélesebb, mint a keret
-                    frame_h = int(frame_w / img_ratio)
-                else: # A kép magasabb, mint a keret
-                    frame_w = int(frame_h * img_ratio)
+            with Image.open(photo_path) as original_img:
+                if fit_mode == 'fit':
+                    img_ratio = original_img.width / original_img.height
+                    frame_ratio = frame_w / frame_h if frame_h > 0 else 1
+                    
+                    if img_ratio > frame_ratio:
+                        frame_h = int(frame_w / img_ratio)
+                    else:
+                        frame_w = int(frame_h * img_ratio)
             
-            # Frissítjük a widget méretét a vásznon
             canvas_item_id = self.widget_to_canvas_item.get(parent_frame)
             if canvas_item_id:
                 self.canvas.itemconfig(canvas_item_id, width=frame_w, height=frame_h)
-            parent_frame.update_idletasks() # Várakozás, hogy az új méret érvénybe lépjen
+            parent_frame.update_idletasks()
 
-            # --- EDDIGI LOGIKA INNENTŐL FOLYTATÓDIK, DE MÁR A HELYES `frame_w` ÉS `frame_h` ÉRTÉKEKKEL ---
             if frame_w <= 1 or frame_h <= 1: return
 
-            original_img = original_img.convert("RGBA") # Újra konvertáljuk, ha kell
-            
-            if props.get('grayscale', False):
-                original_img = original_img.convert('L').convert('RGBA')
-            enhancer = ImageEnhance.Brightness(original_img); original_img = enhancer.enhance(props.get('brightness', 1.0))
-            enhancer = ImageEnhance.Contrast(original_img); original_img = enhancer.enhance(props.get('contrast', 1.0))
-            enhancer = ImageEnhance.Color(original_img); original_img = enhancer.enhance(props.get('saturation', 1.0))
+            with Image.open(photo_path) as original_img:
+                original_img = original_img.convert("RGBA")
+                
+                if props.get('grayscale', False):
+                    original_img = original_img.convert('L').convert('RGBA')
+                enhancer = ImageEnhance.Brightness(original_img); original_img = enhancer.enhance(props.get('brightness', 1.0))
+                enhancer = ImageEnhance.Contrast(original_img); original_img = enhancer.enhance(props.get('contrast', 1.0))
+                enhancer = ImageEnhance.Color(original_img); original_img = enhancer.enhance(props.get('saturation', 1.0))
 
-            zoom, pan_x, pan_y = props.get('zoom', 1.0), props.get('pan_x', 0.5), props.get('pan_y', 0.5)
-            
-            if fit_mode == 'fill':
-                img_ratio = original_img.width / original_img.height; frame_ratio = frame_w / frame_h
-                if img_ratio > frame_ratio: new_h, new_w = int(frame_h * zoom), int(frame_h * zoom * img_ratio)
-                else: new_w, new_h = int(frame_w * zoom), int(frame_w * zoom / img_ratio)
-                if new_w < frame_w: new_w = frame_w; new_h = int(new_w / img_ratio)
-                if new_h < frame_h: new_h = frame_h; new_w = int(new_h * img_ratio)
-                zoomed_img = original_img.resize((new_w, new_h), Image.LANCZOS)
-                extra_w, extra_h = max(0, new_w - frame_w), max(0, new_h - frame_h)
-                crop_x, crop_y = int(extra_w * pan_x), int(extra_h * pan_y)
-                final_image = zoomed_img.crop((crop_x, crop_y, crop_x + frame_w, crop_y + frame_h))
-            else: # 'fit' mód
-                fit_w, fit_h = frame_w, frame_h # A keret már a helyes méretű
-                new_w, new_h = int(fit_w * zoom), int(fit_h * zoom)
-                if new_w < 1 or new_h < 1: new_w, new_h = 1, 1
-                resized_img = original_img.resize((new_w, new_h), Image.LANCZOS)
-                final_image = Image.new('RGBA', (frame_w, frame_h), (0, 0, 0, 0))
-                extra_w, extra_h = max(0, new_w - frame_w), max(0, new_h - frame_h)
-                paste_x = (frame_w - new_w) // 2 - int(extra_w * (pan_x - 0.5))
-                paste_y = (frame_h - new_h) // 2 - int(extra_h * (pan_y - 0.5))
-                final_image.paste(resized_img, (paste_x, paste_y), resized_img)
+                zoom, pan_x, pan_y = props.get('zoom', 1.0), props.get('pan_x', 0.5), props.get('pan_y', 0.5)
+                
+                if fit_mode == 'fill':
+                    img_ratio = original_img.width / original_img.height; frame_ratio = frame_w / frame_h if frame_h > 0 else 1
+                    if img_ratio > frame_ratio: new_h, new_w = int(frame_h * zoom), int(frame_h * zoom * img_ratio)
+                    else: new_w, new_h = int(frame_w * zoom), int(frame_w * zoom / img_ratio)
+                    if new_w < frame_w: new_w, new_h = frame_w, int(frame_w / img_ratio)
+                    if new_h < frame_h: new_h, new_w = frame_h, int(frame_h * img_ratio)
+                    zoomed_img = original_img.resize((new_w, new_h), Image.LANCZOS)
+                    extra_w, extra_h = max(0, new_w - frame_w), max(0, new_h - frame_h)
+                    crop_x, crop_y = int(extra_w * pan_x), int(extra_h * pan_y)
+                    final_image = zoomed_img.crop((crop_x, crop_y, crop_x + frame_w, crop_y + frame_h))
+                else: # 'fit' mode
+                    new_w, new_h = int(frame_w * zoom), int(frame_h * zoom)
+                    if new_w < 1 or new_h < 1: new_w, new_h = 1, 1
+                    resized_img = original_img.resize((new_w, new_h), Image.LANCZOS)
+                    final_image = Image.new('RGBA', (frame_w, frame_h), (0, 0, 0, 0))
+                    extra_w, extra_h = max(0, new_w - frame_w), max(0, new_h - frame_h)
+                    paste_x = (frame_w - new_w) // 2 - int(extra_w * (pan_x - 0.5))
+                    paste_y = (frame_h - new_h) // 2 - int(extra_h * (pan_y - 0.5))
+                    final_image.paste(resized_img, (paste_x, paste_y), resized_img)
 
             frame_path = props.get('frame_path')
             if frame_path:
-                # ... (a keret logika változatlan) ...
                 thickness_ratio = props.get('frame_thickness', 0.05)
                 frame_img = None
-                if frame_path.startswith('preset_'): frame_img = self._create_preset_frame(frame_path, (frame_w, frame_h), thickness_ratio)
-                elif os.path.exists(frame_path): frame_img = Image.open(frame_path).convert("RGBA")
+                if frame_path.startswith('preset_'): 
+                    frame_img = self._create_preset_frame(frame_path, (frame_w, frame_h), thickness_ratio)
+                elif os.path.exists(frame_path): 
+                    with Image.open(frame_path) as img_fr:
+                        frame_img = img_fr.convert("RGBA")
+                
                 if frame_img:
-                    f_scale = props.get('frame_scale', 1.0); f_off_x = props.get('frame_offset_x', 0); f_off_y = props.get('frame_offset_y', 0)
-                    new_fw, new_fh = int(frame_w * f_scale), int(frame_h * f_scale)
-                    resized_frame = frame_img.resize((new_fw, new_fh), Image.LANCZOS)
-                    paste_x, paste_y = (frame_w - new_fw) // 2 + f_off_x, (frame_h - new_fh) // 2 + f_off_y
-                    final_image.paste(resized_frame, (paste_x, paste_y), resized_frame)
+                    # ### JAVÍTÁS (Képkeret az élő előnézetben): ###
+                    # Itt is bevezetjük a kétlépcsős átméretezést a torzítás elkerülése érdekében.
+                    base_resized_frame = frame_img.resize((frame_w, frame_h), Image.LANCZOS)
+                    
+                    f_scale = props.get('frame_scale', 1.0)
+                    f_off_x = props.get('frame_offset_x', 0)
+                    f_off_y = props.get('frame_offset_y', 0)
+                    
+                    scaled_fw = int(frame_w * f_scale)
+                    scaled_fh = int(frame_h * f_scale)
+
+                    final_frame_img = base_resized_frame
+                    if (scaled_fw, scaled_fh) != (frame_w, frame_h) and scaled_fw > 0 and scaled_fh > 0:
+                        final_frame_img = base_resized_frame.resize((scaled_fw, scaled_fh), Image.LANCZOS)
+                    
+                    paste_x = (frame_w - scaled_fw) // 2 + f_off_x
+                    paste_y = (frame_h - scaled_fh) // 2 + f_off_y
+                    final_image.paste(final_frame_img, (paste_x, paste_y), final_frame_img)
             
             final_ctk_image = ctk.CTkImage(light_image=final_image.convert("RGB"), dark_image=final_image.convert("RGB"), size=(frame_w, frame_h))
+            
             img_label = None
             if is_update and len(parent_frame.winfo_children()) > 0 and isinstance(parent_frame.winfo_children()[0], ctk.CTkLabel):
                 img_label = parent_frame.winfo_children()[0]
             
-            if img_label: img_label.configure(image=final_ctk_image)
+            if img_label: 
+                img_label.configure(image=final_ctk_image)
             else:
                 for widget in parent_frame.winfo_children(): widget.destroy()
                 img_label = ctk.CTkLabel(parent_frame, image=final_ctk_image, text="")
