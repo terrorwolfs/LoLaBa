@@ -2773,6 +2773,12 @@ class FotokonyvGUI:
 
         self._show_working_indicator()
         try:
+            # --- JAVÍTÁS KEZDETE ---
+            # 1. Mentsük el a felhasználó által kiválasztott könyvméretet, MIELŐTT bármit visszaállítanánk.
+            selected_size_name = self.selected_book_size_name.get()
+            page_size = self.BOOK_SIZES.get(selected_size_name, self.DEFAULT_BOOK_SIZE_PIXELS)
+            # --- JAVÍTÁS VÉGE ---
+
             image_groups = self._analyze_images_by_subfolder(folder_path)
             
             if not image_groups:
@@ -2795,8 +2801,8 @@ class FotokonyvGUI:
                 final_style_name = self.wizard_image_theme_name.capitalize()
             
             self._reset_project_state()
-            page_size = self.BOOK_SIZES.get(self.selected_book_size_name.get(), self.DEFAULT_BOOK_SIZE_PIXELS)
-            # Az első oldalt itt még nem hozzuk létre, mert a ciklus kezeli
+            # --- JAVÍTÁS: A méretválasztó változót is állítsuk vissza az elmentett értékre ---
+            self.selected_book_size_name.set(selected_size_name)
             
             group_paths = list(image_groups.keys())
             random.shuffle(group_paths)
@@ -2805,31 +2811,26 @@ class FotokonyvGUI:
 
             for group_path in group_paths:
                 images_in_group = image_groups[group_path]
-                # A mappa nevét kinyerjük az elérési útból
                 folder_name = os.path.basename(group_path)
                 
                 group_page_defs = self._generate_page_definitions(images_in_group)
                 
-                # Végigmegyünk a mappához tartozó oldalakon
                 for i, page_def in enumerate(group_page_defs):
-                    # Ha ez a legelső oldal, akkor létrehozzuk az alap oldalt
                     if is_first_page_ever:
+                        # --- JAVÍTÁS: Itt már az elmentett `page_size` értéket használjuk ---
                         self.pages.append({'photos': [], 'texts': [], 'size': page_size})
                         is_first_page_ever = False
                     else:
-                        # Minden további oldalhoz újat adunk hozzá
                         self.add_new_page()
 
-                   
-                    # Csak a mappa első oldalára tesszük ki a címet
+                    
                     if i == 0:
-                        # Esztétikusabbá tesszük a mappa nevét (pl. "balatoni_kepek" -> "Balatoni kepek")
                         title_text = folder_name.replace('_', ' ').replace('-', ' ').capitalize()
                         
                         title_text_data = {
                             "text": title_text,
-                            "relx": 0.5,       # Vízszintesen középre
-                            "rely": 0.08,      # Fentre, egy kis margóval
+                            "relx": 0.5,      # Vízszintesen középre
+                            "rely": 0.08,     # Fentre, egy kis margóval
                             "font_family": "Impact", # Látványosabb betűtípus
                             "font_size": 48,       # Nagyobb méret
                             "font_style": "normal",
